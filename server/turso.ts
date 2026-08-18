@@ -1,5 +1,5 @@
 import { createClient, type Client, type InStatement } from "@libsql/client";
-import type { SheetInvoice } from "./sync";
+import type { SheetInvoice } from "./sync.js";
 
 let client: Client | null = null;
 let schemaReady: Promise<void> | null = null;

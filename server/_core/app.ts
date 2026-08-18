@@ -1,10 +1,10 @@
 import express from "express";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
-import { registerOAuthRoutes } from "./oauth";
-import { registerStorageProxy } from "./storageProxy";
-import { appRouter } from "../routers";
-import { createContext } from "./context";
-import { parseRows } from "../sync";
+import { registerOAuthRoutes } from "./oauth.js";
+import { registerStorageProxy } from "./storageProxy.js";
+import { appRouter } from "../routers.js";
+import { createContext } from "./context.js";
+import { parseRows } from "../sync.js";
 import {
   applyFullSnapshot,
   createSharedLink,
@@ -14,13 +14,13 @@ import {
   listSharedLinks,
   removeSharedLink,
   updateSharedLink,
-} from "../turso";
+} from "../turso.js";
 import {
   createInvoiceWithSync,
   updateInvoiceWithSync,
   deleteInvoiceWithSync,
-} from "../invoiceHandlers";
-import { applyInvoiceFilters } from "../../shared/invoiceLogic";
+} from "../invoiceHandlers.js";
+import { applyInvoiceFilters } from "../../shared/invoiceLogic.js";
 
 export function buildApp() {
   const app = express();
@@ -31,7 +31,7 @@ export function buildApp() {
   registerOAuthRoutes(app);
   app.get("/api/sync/run", async (_req, res) => {
     try {
-      const result = await (await import("../sync")).runSync();
+      const result = await (await import("../sync.js")).runSync();
       const eventId = result.syncToken || `pull-${result.syncedAt}`;
       const summary = await applyFullSnapshot(result.invoices, eventId, "manual-full-sync");
       res.json({ ok: true, ...result, persisted: summary });
@@ -82,11 +82,11 @@ export function buildApp() {
     catch { res.status(503).json({ ok: false, error: "DATABASE_UNAVAILABLE" }); }
   });
   app.post("/api/invoices", async (req, res) => {
-    try { const invoice = req.body as import("../sync").SheetInvoice; if (!invoice?.id || !invoice.company || !invoice.number) return res.status(400).json({ ok: false, error: "INVALID_INVOICE" }); const saved = await createInvoiceWithSync(invoice); res.status(201).json({ ok: true, invoice: saved }); }
+    try { const invoice = req.body as import("../sync.js").SheetInvoice; if (!invoice?.id || !invoice.company || !invoice.number) return res.status(400).json({ ok: false, error: "INVALID_INVOICE" }); const saved = await createInvoiceWithSync(invoice); res.status(201).json({ ok: true, invoice: saved }); }
     catch { res.status(502).json({ ok: false, error: "INVOICE_CREATE_FAILED" }); }
   });
   app.patch("/api/invoices/:id", async (req, res) => {
-    try { const invoice = { ...(req.body as import("../sync").SheetInvoice), id: req.params.id }; if (!invoice.company || !invoice.number) return res.status(400).json({ ok: false, error: "INVALID_INVOICE" }); const saved = await updateInvoiceWithSync(invoice); res.json({ ok: true, invoice: saved }); }
+    try { const invoice = { ...(req.body as import("../sync.js").SheetInvoice), id: req.params.id }; if (!invoice.company || !invoice.number) return res.status(400).json({ ok: false, error: "INVALID_INVOICE" }); const saved = await updateInvoiceWithSync(invoice); res.json({ ok: true, invoice: saved }); }
     catch { res.status(502).json({ ok: false, error: "INVOICE_UPDATE_FAILED" }); }
   });
   app.delete("/api/invoices/:id", async (req, res) => {

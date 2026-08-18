@@ -1,6 +1,6 @@
-import { applyFullSnapshot } from "./turso";
-import { confirmInvoiceDeleted, confirmInvoicePresent, deleteInvoiceFromSheet, pushInvoiceToSheet, runSync, type SheetInvoice } from "./sync";
-import { deleteInvoice } from "./turso";
+import { applyFullSnapshot } from "./turso.js";
+import { confirmInvoiceDeleted, confirmInvoicePresent, deleteInvoiceFromSheet, pushInvoiceToSheet, runSync, type SheetInvoice } from "./sync.js";
+import { deleteInvoice } from "./turso.js";
 
 type SyncDeps = {
   push: typeof pushInvoiceToSheet;
