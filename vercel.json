@@ -1,9 +1,10 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "version": 2,
+  "enableCorepack": true,
   "builds": [
     {
-      "src": "server/_core/index.ts",
+      "src": "server/vercel.ts",
       "use": "@vercel/node",
       "config": {
         "includeFiles": ["dist/public/**"]
@@ -13,7 +14,7 @@
   "routes": [
     {
       "src": "/(.*)",
-      "dest": "server/_core/index.ts"
+      "dest": "server/vercel.ts"
     }
   ]
 }
