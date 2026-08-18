@@ -20,7 +20,7 @@ import {
   updateInvoiceWithSync,
   deleteInvoiceWithSync,
 } from "../invoiceHandlers";
-import { applyInvoiceFilters } from "@shared/invoiceLogic";
+import { applyInvoiceFilters } from "../../shared/invoiceLogic";
 
 export function buildApp() {
   const app = express();
