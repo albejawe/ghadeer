@@ -4,14 +4,18 @@ import NotFound from "@/pages/NotFound";
 import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
+import Delegates from "./pages/Delegates";
 import Home from "./pages/Home";
+import Launcher from "./pages/Launcher";
 import SharedLink from "./pages/SharedLink";
 
 function Router() {
   // make sure to consider if you need authentication for certain routes
   return (
     <Switch>
-      <Route path={"/"} component={Home} />
+      <Route path={"/"} component={Launcher} />
+      <Route path={"/dashboard"} component={Home} />
+      <Route path={"/delegates"} component={Delegates} />
       <Route path={"/shared/:id"} component={SharedLink} />
       <Route path={"/404"} component={NotFound} />
       {/* Final fallback route */}

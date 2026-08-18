@@ -52,11 +52,22 @@ export async function setupVite(app: Express, server: Server) {
   });
 }
 
+export function findDistPublic(): string {
+  let dir = import.meta.dirname;
+  for (let i = 0; i < 12; i++) {
+    const candidate = path.join(dir, "dist", "public");
+    if (fs.existsSync(path.join(candidate, "index.html"))) {
+      return candidate;
+    }
+    const parent = path.dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return path.join(import.meta.dirname, "dist", "public");
+}
+
 export function serveStatic(app: Express) {
-  const distPath =
-    process.env.NODE_ENV === "development"
-      ? path.resolve(import.meta.dirname, "../..", "dist", "public")
-      : path.resolve(import.meta.dirname, "public");
+  const distPath = findDistPublic();
   if (!fs.existsSync(distPath)) {
     console.error(
       `Could not find the build directory: ${distPath}, make sure to build the client first`
