@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Loader2, ShieldCheck, WalletCards } from "lucide-react";
 import { sharedIdFromPath } from "@/lib/sharedLinkUtils";
+import { findLocalLink, invoicesFromLocalLink } from "@/lib/localWallet";
 import { currency, statusChipClass, type Invoice } from "@/components/dashboard/types";
 
 type SharedData = { name: string; invoices: Invoice[] };
@@ -39,7 +40,13 @@ export default function SharedLink() {
           });
       })
       .catch(() => {
-        if (active) setError(true);
+        if (!active) return;
+        const localLink = findLocalLink(id);
+        if (localLink) {
+          setData({ name: localLink.name, invoices: invoicesFromLocalLink(localLink) });
+        } else {
+          setError(true);
+        }
       })
       .finally(() => {
         if (active) setLoading(false);

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { BarChart3, CalendarDays, Check, FileSpreadsheet, Plus, WalletCards } from "lucide-react";
+import { BarChart3, CalendarDays, Check, FileSpreadsheet, HardDrive, Plus, WalletCards } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Sidebar } from "@/components/dashboard/Sidebar";
@@ -13,6 +13,7 @@ import type { Invoice, SharedLink, SortKey, SortState } from "@/components/dashb
 import { normalizeSelectOptions, applyInvoiceFilters } from "@shared/invoiceLogic";
 import { buildExcelHtml, buildPrintTitle } from "@/lib/exportUtils";
 import { createSharedLinkRequest, sharedLinkPath } from "@/lib/sharedLinkUtils";
+import { loadLocalInvoices, loadLocalLinks, saveLocalInvoices, saveLocalLinks } from "@/lib/localWallet";
 
 const toDateInputValue = (value: string) => {
   if (!value) return "";
@@ -43,6 +44,7 @@ export default function Home() {
   const [loadingData, setLoadingData] = useState(true);
   const [lastSync, setLastSync] = useState<string | null>(null);
   const [editing, setEditing] = useState<Invoice | null>(null);
+  const [apiUnavailable, setApiUnavailable] = useState(false);
   const [search, setSearch] = useState("");
   const [company, setCompany] = useState("الكل");
   const [governorate, setGovernorate] = useState("الكل");
@@ -157,13 +159,22 @@ export default function Home() {
       if (!response.ok) throw new Error("save");
       const payload = await response.json();
       const saved = payload.invoice as Invoice;
-      setInvoices((old) =>
-        editing ? old.map((i) => (i.id === editing.id ? saved : i)) : [saved, ...old]
-      );
+      setInvoices((old) => {
+        const updated = editing ? old.map((i) => (i.id === editing.id ? saved : i)) : [saved, ...old];
+        saveLocalInvoices(updated);
+        return updated;
+      });
       setFormOpen(false);
       toast.success(editing ? "تم تحديث الفاتورة" : "تمت إضافة الفاتورة");
     } catch {
-      toast.error("تعذر حفظ الفاتورة");
+      const local = editing
+        ? loadLocalInvoices().map((i) => (i.id === editing.id ? next : i))
+        : [next, ...loadLocalInvoices()];
+      saveLocalInvoices(local);
+      setInvoices(local);
+      setApiUnavailable(true);
+      setFormOpen(false);
+      toast.success(editing ? "تم تحديث الفاتورة (بيانات محلية)" : "تمت إضافة الفاتورة (بيانات محلية)");
     }
   };
 
@@ -172,10 +183,18 @@ export default function Home() {
     try {
       const response = await fetch(`/api/invoices/${invoice.id}`, { method: "DELETE" });
       if (!response.ok) throw new Error("delete");
-      setInvoices((old) => old.filter((i) => i.id !== invoice.id));
+      setInvoices((old) => {
+        const updated = old.filter((i) => i.id !== invoice.id);
+        saveLocalInvoices(updated);
+        return updated;
+      });
       toast.success("تم حذف الفاتورة نهائياً");
     } catch {
-      toast.error("تعذر حذف الفاتورة");
+      const updated = loadLocalInvoices().filter((i) => i.id !== invoice.id);
+      saveLocalInvoices(updated);
+      setInvoices(updated);
+      setApiUnavailable(true);
+      toast.success("تم حذف الفاتورة (بيانات محلية)");
     }
   };
 
@@ -210,9 +229,14 @@ export default function Home() {
       const response = await fetch("/api/shared-links");
       if (!response.ok) throw new Error("links");
       const payload = await response.json();
-      setSharedLinks(payload.links || []);
+      const links = payload.links || [];
+      saveLocalLinks(links);
+      setSharedLinks(links);
+      setApiUnavailable(false);
     } catch {
-      toast.error("تعذر تحميل الروابط المشتركة");
+      const local = loadLocalLinks();
+      setSharedLinks(local);
+      if (local.length === 0) toast.error("تعذر تحميل الروابط المشتركة");
     }
   };
 
@@ -222,11 +246,29 @@ export default function Home() {
       if (!response.ok) throw new Error("create-link");
       const payload = await response.json();
       const link = payload.link as SharedLink;
-      setSharedLinks((old) => [link, ...old]);
+      setSharedLinks((old) => {
+        const links = [link, ...old];
+        saveLocalLinks(links);
+        return links;
+      });
       await navigator.clipboard?.writeText(sharedLinkPath(window.location.origin, link.id));
       toast.success("تم إنشاء الرابط ونسخه");
     } catch {
-      toast.error("تعذر إنشاء الرابط");
+      const link: SharedLink = {
+        id: crypto.randomUUID(),
+        name: "رابط تقرير",
+        filters: currentFilters as Record<string, string>,
+        active: true,
+        createdAt: new Date().toISOString(),
+      };
+      setSharedLinks((old) => {
+        const links = [link, ...old];
+        saveLocalLinks(links);
+        return links;
+      });
+      setApiUnavailable(true);
+      await navigator.clipboard?.writeText(sharedLinkPath(window.location.origin, link.id));
+      toast.success("تم إنشاء الرابط ونسخه (بيانات محلية)");
     }
   };
 
@@ -247,12 +289,20 @@ export default function Home() {
         body: JSON.stringify({ active: !link.active }),
       });
       if (!response.ok) throw new Error("toggle");
-      setSharedLinks((old) =>
-        old.map((item) => (item.id === link.id ? { ...item, active: !item.active } : item))
-      );
+      setSharedLinks((old) => {
+        const links = old.map((item) => (item.id === link.id ? { ...item, active: !item.active } : item));
+        saveLocalLinks(links);
+        return links;
+      });
       toast.success(link.active ? "تم إيقاف الرابط" : "تم تفعيل الرابط");
     } catch {
-      toast.error("تعذر تحديث الرابط");
+      setSharedLinks((old) => {
+        const links = old.map((item) => (item.id === link.id ? { ...item, active: !item.active } : item));
+        saveLocalLinks(links);
+        return links;
+      });
+      setApiUnavailable(true);
+      toast.success(link.active ? "تم إيقاف الرابط (بيانات محلية)" : "تم تفعيل الرابط (بيانات محلية)");
     }
   };
 
@@ -261,10 +311,20 @@ export default function Home() {
     try {
       const response = await fetch(`/api/shared-links/${link.id}`, { method: "DELETE" });
       if (!response.ok) throw new Error("remove");
-      setSharedLinks((old) => old.filter((item) => item.id !== link.id));
+      setSharedLinks((old) => {
+        const links = old.filter((item) => item.id !== link.id);
+        saveLocalLinks(links);
+        return links;
+      });
       toast.success("تم حذف الرابط");
     } catch {
-      toast.error("تعذر حذف الرابط");
+      setSharedLinks((old) => {
+        const links = old.filter((item) => item.id !== link.id);
+        saveLocalLinks(links);
+        return links;
+      });
+      setApiUnavailable(true);
+      toast.success("تم حذف الرابط (بيانات محلية)");
     }
   };
 
@@ -291,6 +351,8 @@ export default function Home() {
       const payload = await response.json();
       if (!Array.isArray(payload.invoices)) throw new Error("invalid-sync");
       setInvoices(payload.invoices);
+      saveLocalInvoices(payload.invoices);
+      setApiUnavailable(false);
       setLastSync(
         new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })
       );
@@ -307,11 +369,18 @@ export default function Home() {
   const loadCachedInvoices = async () => {
     try {
       const response = await fetch("/api/invoices");
-      if (!response.ok) return;
+      if (!response.ok) throw new Error("api");
       const payload = await response.json();
-      if (Array.isArray(payload.invoices)) setInvoices(payload.invoices);
-      setLoadingData(false);
+      if (Array.isArray(payload.invoices)) {
+        setInvoices(payload.invoices);
+        saveLocalInvoices(payload.invoices);
+      }
+      setApiUnavailable(false);
     } catch {
+      const local = loadLocalInvoices();
+      if (local.length > 0) setInvoices(local);
+      setApiUnavailable(true);
+    } finally {
       setLoadingData(false);
     }
   };
@@ -373,7 +442,15 @@ export default function Home() {
             <div className="page-heading compact-heading">
               <div>
                 <p className="eyebrow">نظرة عامة</p>
-                <h1>حساباتي</h1>
+                <div className="heading-title-row">
+                  <h1>حساباتي</h1>
+                  {apiUnavailable && (
+                    <span className="local-mode-pill" title="تُحفظ البيانات في متصفح جهازك حالياً">
+                      <HardDrive size={13} aria-hidden />
+                      بيانات محلية
+                    </span>
+                  )}
+                </div>
               </div>
               <div className="heading-actions">
                 <Button variant="outline" onClick={exportExcel}>
