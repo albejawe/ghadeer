@@ -1,7 +1,10 @@
-import { Menu, MoonStar, RefreshCw, Sun } from "lucide-react";
+import { LayoutDashboard, Link2, Menu, MoonStar, RefreshCw, Sun } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "@/contexts/ThemeContext";
 import { sidebarAriaLabel, toggleSidebar } from "@/lib/sidebarState";
+import { NotificationCenter } from "./NotificationCenter";
+import { PwaInstallHeaderButton } from "./PwaInstallBanner";
+import type { Invoice } from "./types";
 
 type TopbarProps = {
   view: "dashboard" | "links";
@@ -11,46 +14,107 @@ type TopbarProps = {
   onToggleMobile: (next: boolean) => void;
   onSync: () => void;
   ready: boolean;
+  invoices?: Invoice[];
+  onSelectInvoice?: (invoice: Invoice) => void;
+  onFilterDueOnly?: () => void;
 };
 
-export function Topbar({ view, syncing, lastSync, mobileOpen, onToggleMobile, onSync, ready }: TopbarProps) {
+export function Topbar({
+  view,
+  syncing,
+  lastSync,
+  mobileOpen,
+  onToggleMobile,
+  onSync,
+  ready,
+  invoices = [],
+  onSelectInvoice,
+  onFilterDueOnly,
+}: TopbarProps) {
   const { theme, toggleTheme, switchable } = useTheme();
+
   return (
     <header className="topbar">
-      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+      <div className="topbar-leading">
         <button
           className="mobile-menu"
           onClick={() => onToggleMobile(toggleSidebar(mobileOpen))}
           aria-label={sidebarAriaLabel(mobileOpen)}
           aria-expanded={mobileOpen}
         >
-          <Menu size={22} aria-hidden />
+          <Menu size={19} aria-hidden />
         </button>
+
         <div className="breadcrumbs">
-          <span>الرئيسية</span>
-          <span aria-hidden>/</span>
-          <strong>{view === "dashboard" ? "الحسابات" : "الروابط المشتركة"}</strong>
+          <span className="breadcrumb-root hidden sm:inline">غدير المحاسبي</span>
+          <span className="breadcrumb-sep hidden sm:inline" aria-hidden>/</span>
+          <span className="breadcrumb-current">
+            {view === "dashboard" ? (
+              <>
+                <LayoutDashboard size={14} className="text-teal-600 dark:text-teal-400 inline ml-1" />
+                <span>الحسابات</span>
+              </>
+            ) : (
+              <>
+                <Link2 size={14} className="text-teal-600 dark:text-teal-400 inline ml-1" />
+                <span>الروابط</span>
+              </>
+            )}
+          </span>
         </div>
       </div>
+
       <div className="topbar-actions">
-        <div className="sync-state">
-          <span className="status-dot" aria-hidden />
-          {syncing ? "جارٍ المزامنة" : !ready ? "جارٍ الاتصال" : "متصل"}
-          <span className="sync-divider" aria-hidden />
-          آخر مزامنة: {lastSync || "—"}
+        {/* PWA Install Button (Desktop Only to save mobile space) */}
+        <div className="hidden md:block">
+          <PwaInstallHeaderButton />
         </div>
+
+        {/* Live sync pill */}
+        <div
+          className={`sync-pill ${syncing ? "is-syncing" : ready ? "is-ready" : "is-connecting"}`}
+          title={lastSync ? `آخر تحديث: ${lastSync}` : "حالة الاتصال"}
+        >
+          <span className="pulse-indicator" aria-hidden />
+          <span className="sync-text hidden sm:inline">
+            {syncing ? "مزامنة..." : !ready ? "اتصال..." : "متصل"}
+          </span>
+        </div>
+
+        {/* Notification Bell Center */}
+        <NotificationCenter
+          invoices={invoices}
+          onSelectInvoice={onSelectInvoice}
+          onFilterDueOnly={onFilterDueOnly}
+        />
+
+        {/* Theme Toggle */}
         {switchable && toggleTheme && (
           <button
-            className="theme-toggle"
+            className="theme-toggle-btn"
             onClick={toggleTheme}
             aria-label={theme === "dark" ? "التبديل إلى الوضع الفاتح" : "التبديل إلى الوضع الداكن"}
+            title={theme === "dark" ? "الوضع الفاتح" : "الوضع الداكن"}
           >
-            {theme === "dark" ? <Sun size={18} aria-hidden /> : <MoonStar size={18} aria-hidden />}
+            {theme === "dark" ? (
+              <Sun size={16} className="text-amber-400" aria-hidden />
+            ) : (
+              <MoonStar size={16} className="text-slate-600" aria-hidden />
+            )}
           </button>
         )}
-        <Button variant="outline" onClick={onSync} disabled={syncing}>
-          <RefreshCw size={15} className={syncing ? "animate-spin" : ""} aria-hidden />
-          {syncing ? "جارٍ المزامنة" : "مزامنة"}
+
+        {/* Sync Button */}
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={onSync}
+          disabled={syncing}
+          className="sync-action-btn h-8 px-2.5 sm:px-3 text-xs"
+          title="تحديث البيانات من السيرفر"
+        >
+          <RefreshCw size={13} className={syncing ? "animate-spin text-teal-500" : ""} aria-hidden />
+          <span className="hidden sm:inline">{syncing ? "تحديث..." : "تحديث"}</span>
         </Button>
       </div>
     </header>

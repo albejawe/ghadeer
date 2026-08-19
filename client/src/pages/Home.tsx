@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { BarChart3, CalendarDays, Check, FileSpreadsheet, HardDrive, Plus, WalletCards } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { BarChart3, CalendarDays, Check, FileSpreadsheet, HardDrive, Plus, Sparkles, WalletCards } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Sidebar } from "@/components/dashboard/Sidebar";
@@ -9,11 +9,13 @@ import { FilterBar } from "@/components/dashboard/FilterBar";
 import { InvoiceTable } from "@/components/dashboard/InvoiceTable";
 import { InvoiceDialog, type InvoiceForm } from "@/components/dashboard/InvoiceDialog";
 import { LinksPanel } from "@/components/dashboard/LinksPanel";
+import { PwaInstallBanner } from "@/components/dashboard/PwaInstallBanner";
 import type { Invoice, SharedLink, SortKey, SortState } from "@/components/dashboard/types";
 import { normalizeSelectOptions, applyInvoiceFilters } from "@shared/invoiceLogic";
 import { buildExcelHtml, buildPrintTitle } from "@/lib/exportUtils";
 import { createSharedLinkRequest, sharedLinkPath } from "@/lib/sharedLinkUtils";
 import { loadLocalInvoices, loadLocalLinks, saveLocalInvoices, saveLocalLinks } from "@/lib/localWallet";
+import { checkDueInvoicesAndNotify } from "@/lib/notifications";
 
 const toDateInputValue = (value: string) => {
   if (!value) return "";
@@ -57,6 +59,28 @@ export default function Home() {
   const [amountMax, setAmountMax] = useState("");
   const [sort, setSort] = useState<SortState>({ key: "createdAt", dir: "desc" });
   const [form, setForm] = useState<InvoiceForm>(emptyForm);
+  const [savingInvoice, setSavingInvoice] = useState(false);
+
+  const invoicesRef = useRef<Invoice[]>([]);
+  invoicesRef.current = invoices;
+
+  // Handle URL Query Params on Load (from Notifications / PWA Shortcuts)
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("filter") === "due" || params.get("quick") === "المستحق الآن") {
+        setQuick("المستحق الآن");
+      }
+      if (params.get("action") === "new") {
+        openCreate();
+      }
+      if (params.get("number")) {
+        setSearch(params.get("number") || "");
+      }
+    } catch {
+      // Ignore URL parsing errors
+    }
+  }, []);
 
   const filtered = useMemo(
     () =>
@@ -132,24 +156,33 @@ export default function Home() {
   const saveInvoice = async () => {
     const amount = Number(form.amount);
     const paid = Number(form.paid || 0);
-    if (!form.company || !form.number || !amount) {
-      toast.error("يرجى إكمال الشركة ورقم الفاتورة والمبلغ");
+    const companyName = form.company.trim();
+    const invoiceNum = form.number.trim();
+
+    if (!companyName || !invoiceNum || !amount) {
+      toast.error("يرجى إدخال اسم الشركة ورقم الفاتورة ومبلغ الفاتورة");
       return;
     }
+
+    setSavingInvoice(true);
+    const createdAt = form.createdAt || new Date().toISOString().slice(0, 10);
+    const dueAt = new Date(new Date(createdAt).getTime() + 60 * 86400000).toISOString().slice(0, 10);
+
     const next: Invoice = {
       id: editing?.id ?? crypto.randomUUID(),
-      company: form.company,
-      governorate: form.governorate,
-      warehouse: form.warehouse,
-      number: form.number,
-      createdAt: form.createdAt,
-      dueAt: "",
+      company: companyName,
+      governorate: form.governorate.trim(),
+      warehouse: form.warehouse.trim(),
+      number: invoiceNum,
+      createdAt,
+      dueAt,
       amount,
       paid,
-      remaining: 0,
-      status: "غير مسدد",
-      note: form.note,
+      remaining: Math.max(0, amount - paid),
+      status: paid >= amount && amount > 0 ? "مسدد" : paid > 0 ? "جزئي" : "غير مسدد",
+      note: form.note.trim(),
     };
+
     try {
       const response = await fetch(editing ? `/api/invoices/${editing.id}` : "/api/invoices", {
         method: editing ? "PATCH" : "POST",
@@ -158,14 +191,14 @@ export default function Home() {
       });
       if (!response.ok) throw new Error("save");
       const payload = await response.json();
-      const saved = payload.invoice as Invoice;
+      const saved = (payload.invoice || next) as Invoice;
       setInvoices((old) => {
         const updated = editing ? old.map((i) => (i.id === editing.id ? saved : i)) : [saved, ...old];
         saveLocalInvoices(updated);
         return updated;
       });
       setFormOpen(false);
-      toast.success(editing ? "تم تحديث الفاتورة" : "تمت إضافة الفاتورة");
+      toast.success(editing ? "تم حفظ التعديلات بنجاح" : "تمت إضافة الفاتورة بنجاح");
     } catch {
       const local = editing
         ? loadLocalInvoices().map((i) => (i.id === editing.id ? next : i))
@@ -174,7 +207,9 @@ export default function Home() {
       setInvoices(local);
       setApiUnavailable(true);
       setFormOpen(false);
-      toast.success(editing ? "تم تحديث الفاتورة (بيانات محلية)" : "تمت إضافة الفاتورة (بيانات محلية)");
+      toast.success(editing ? "تم تحديث الفاتورة (حُفظت محلياً)" : "تمت إضافة الفاتورة (حُفظت محلياً)");
+    } finally {
+      setSavingInvoice(false);
     }
   };
 
@@ -242,7 +277,7 @@ export default function Home() {
 
   const createShared = async () => {
     try {
-      const response = await fetch("/api/shared-links", createSharedLinkRequest(currentFilters));
+      const response = await fetch("/api/shared-links", createSharedLinkRequest(currentFilters as any));
       if (!response.ok) throw new Error("create-link");
       const payload = await response.json();
       const link = payload.link as SharedLink;
@@ -251,63 +286,61 @@ export default function Home() {
         saveLocalLinks(links);
         return links;
       });
-      await navigator.clipboard?.writeText(sharedLinkPath(window.location.origin, link.id));
-      toast.success("تم إنشاء الرابط ونسخه");
+      const url = sharedLinkPath(window.location.origin, link.id);
+      await navigator.clipboard.writeText(url);
+      toast.success("تم إنشاء الرابط ونسخه للحافظة بنجاح");
     } catch {
-      const link: SharedLink = {
-        id: crypto.randomUUID(),
-        name: "رابط تقرير",
-        filters: currentFilters as Record<string, string>,
+      const localLink: SharedLink = {
+        id: crypto.randomUUID().slice(0, 8),
+        name: "تقرير فواتير مشارك",
+        filters: currentFilters as any,
         active: true,
         createdAt: new Date().toISOString(),
       };
-      setSharedLinks((old) => {
-        const links = [link, ...old];
-        saveLocalLinks(links);
-        return links;
-      });
+      const links = [localLink, ...loadLocalLinks()];
+      saveLocalLinks(links);
+      setSharedLinks(links);
       setApiUnavailable(true);
-      await navigator.clipboard?.writeText(sharedLinkPath(window.location.origin, link.id));
-      toast.success("تم إنشاء الرابط ونسخه (بيانات محلية)");
+      const url = sharedLinkPath(window.location.origin, localLink.id);
+      await navigator.clipboard.writeText(url);
+      toast.success("تم إنشاء الرابط (محلياً) ونسخه للحافظة");
     }
   };
 
   const copyShared = async (link: SharedLink) => {
-    try {
-      await navigator.clipboard?.writeText(`${window.location.origin}/shared/${link.id}`);
-      toast.success("تم نسخ الرابط");
-    } catch {
-      toast.error("تعذر نسخ الرابط");
-    }
+    const url = sharedLinkPath(window.location.origin, link.id);
+    await navigator.clipboard.writeText(url);
+    toast.success("تم نسخ الرابط للحافظة");
   };
 
   const toggleShared = async (link: SharedLink) => {
+    const next = !link.active;
     try {
       const response = await fetch(`/api/shared-links/${link.id}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ active: !link.active }),
+        body: JSON.stringify({ active: next }),
       });
       if (!response.ok) throw new Error("toggle");
       setSharedLinks((old) => {
-        const links = old.map((item) => (item.id === link.id ? { ...item, active: !item.active } : item));
+        const links = old.map((item) => (item.id === link.id ? { ...item, active: next } : item));
         saveLocalLinks(links);
         return links;
       });
-      toast.success(link.active ? "تم إيقاف الرابط" : "تم تفعيل الرابط");
+      toast.success(next ? "تم تفعيل الرابط" : "تم تعطيل الرابط");
     } catch {
       setSharedLinks((old) => {
-        const links = old.map((item) => (item.id === link.id ? { ...item, active: !item.active } : item));
+        const links = old.map((item) => (item.id === link.id ? { ...item, active: next } : item));
         saveLocalLinks(links);
         return links;
       });
       setApiUnavailable(true);
-      toast.success(link.active ? "تم إيقاف الرابط (بيانات محلية)" : "تم تفعيل الرابط (بيانات محلية)");
+      toast.success(next ? "تم تفعيل الرابط (محلياً)" : "تم تعطيل الرابط (محلياً)");
     }
   };
 
   const removeShared = async (link: SharedLink) => {
-    if (!confirm("هل أنت متأكد من حذف هذا الرابط؟ لن يعمل بعد الآن.")) return;
+    if (!confirm("هل أنت متأكد من حذف هذا الرابط المشارك؟")) return;
     try {
       const response = await fetch(`/api/shared-links/${link.id}`, { method: "DELETE" });
       if (!response.ok) throw new Error("remove");
@@ -357,6 +390,8 @@ export default function Home() {
         new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })
       );
       if (!silent) toast.success("تمت المزامنة بنجاح");
+      // Check due debts and fire notifications
+      void checkDueInvoicesAndNotify(payload.invoices);
     } catch {
       if (!silent) toast.error("تعذر إتمام المزامنة؛ تم الاحتفاظ بالبيانات المخزنة");
     } finally {
@@ -374,11 +409,16 @@ export default function Home() {
       if (Array.isArray(payload.invoices)) {
         setInvoices(payload.invoices);
         saveLocalInvoices(payload.invoices);
+        // Check due debts and fire notifications
+        void checkDueInvoicesAndNotify(payload.invoices);
       }
       setApiUnavailable(false);
     } catch {
       const local = loadLocalInvoices();
-      if (local.length > 0) setInvoices(local);
+      if (local.length > 0) {
+        setInvoices(local);
+        void checkDueInvoicesAndNotify(local);
+      }
       setApiUnavailable(true);
     } finally {
       setLoadingData(false);
@@ -388,6 +428,15 @@ export default function Home() {
   useEffect(() => {
     void loadCachedInvoices();
     void runSync(true);
+
+    // Periodic Background Check every 15 minutes
+    const interval = window.setInterval(() => {
+      if (invoicesRef.current.length > 0) {
+        void checkDueInvoicesAndNotify(invoicesRef.current);
+      }
+    }, 15 * 60 * 1000);
+
+    return () => window.clearInterval(interval);
   }, []);
 
   useEffect(() => {
@@ -425,6 +474,9 @@ export default function Home() {
           onToggleMobile={setMobileOpen}
           onSync={() => void runSync()}
           ready={!loadingData}
+          invoices={invoices}
+          onSelectInvoice={openEdit}
+          onFilterDueOnly={() => setQuick("المستحق الآن")}
         />
 
         {activeView === "links" ? (
@@ -439,27 +491,31 @@ export default function Home() {
           />
         ) : (
           <section className="page-container" aria-label="الحسابات">
-            <div className="page-heading compact-heading">
-              <div>
-                <p className="eyebrow">نظرة عامة</p>
-                <div className="heading-title-row">
-                  <h1>حساباتي</h1>
+            {/* PWA Floating Install Banner for Mobile & Desktop */}
+            <PwaInstallBanner />
+
+            {/* Clean Executive Page Heading */}
+            <div className="page-heading">
+              <div className="heading-main-info">
+                <div className="flex items-center gap-2">
+                  <h1 className="text-2xl font-black text-foreground">حسابات المذاخر والشركات</h1>
                   {apiUnavailable && (
                     <span className="local-mode-pill" title="تُحفظ البيانات في متصفح جهازك حالياً">
                       <HardDrive size={13} aria-hidden />
-                      بيانات محلية
+                      تخزين محلي
                     </span>
                   )}
                 </div>
               </div>
+
               <div className="heading-actions">
-                <Button variant="outline" onClick={exportExcel}>
-                  <FileSpreadsheet size={17} aria-hidden />
-                  تصدير Excel
+                <Button variant="outline" size="sm" onClick={exportExcel} className="export-btn">
+                  <FileSpreadsheet size={15} className="ml-1.5 text-emerald-600 dark:text-emerald-400" aria-hidden />
+                  <span>تصدير Excel</span>
                 </Button>
-                <Button onClick={openCreate}>
-                  <Plus size={18} aria-hidden />
-                  إضافة فاتورة
+                <Button size="sm" onClick={openCreate} className="btn-primary">
+                  <Plus size={16} className="ml-1.5" aria-hidden />
+                  <span>إضافة فاتورة</span>
                 </Button>
               </div>
             </div>
@@ -560,6 +616,7 @@ export default function Home() {
         onFormChange={setForm}
         options={options}
         onSave={() => void saveInvoice()}
+        saving={savingInvoice}
       />
     </div>
   );

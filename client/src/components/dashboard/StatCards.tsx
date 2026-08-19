@@ -1,5 +1,5 @@
 import { Card } from "@/components/ui/card";
-import { WalletCards } from "lucide-react";
+import { ArrowUpRight, TrendingDown, TrendingUp, WalletCards } from "lucide-react";
 import { currency } from "./types";
 
 type StatCardProps = {
@@ -11,53 +11,86 @@ type StatCardProps = {
   loading: boolean;
   progress?: number;
   variant?: "bar" | "ring";
+  trend?: string;
 };
 
-export function StatCard({ title, value, hint, icon: Icon, tone, loading, progress, variant = "bar" }: StatCardProps) {
+export function StatCard({
+  title,
+  value,
+  hint,
+  icon: Icon,
+  tone,
+  loading,
+  progress,
+  variant = "bar",
+  trend,
+}: StatCardProps) {
   const rate = typeof progress === "number" ? Math.round(Math.min(100, Math.max(0, progress))) : null;
-  const ringLength = 2 * Math.PI * 26;
+  const radius = 24;
+  const ringLength = 2 * Math.PI * radius;
+
   return (
     <Card className={`stat-card group tone-${tone}`} aria-label={title}>
-      <div className={`stat-icon ${tone}`}>
-        <Icon size={20} strokeWidth={1.9} aria-hidden />
+      {/* Background tone glow */}
+      <div className="stat-glow-bg" aria-hidden />
+
+      <div className="stat-header">
+        <div className={`stat-icon-badge ${tone}`}>
+          <Icon size={20} strokeWidth={2.2} aria-hidden />
+        </div>
+        {rate !== null && variant === "ring" ? (
+          <div className="stat-ring-wrapper" role="img" aria-label={`نسبة ${title}: ${rate}%`}>
+            <svg viewBox="0 0 60 60" width="52" height="52" aria-hidden="true">
+              <circle className="ring-track" cx="30" cy="30" r={radius} fill="none" strokeWidth="6" />
+              <circle
+                className="ring-fill"
+                cx="30"
+                cy="30"
+                r={radius}
+                fill="none"
+                strokeWidth="6"
+                strokeLinecap="round"
+                strokeDasharray={ringLength}
+                strokeDashoffset={ringLength * (1 - rate / 100)}
+                transform="rotate(-90 30 30)"
+              />
+            </svg>
+            <strong className="ring-number tabular">{rate}%</strong>
+          </div>
+        ) : trend ? (
+          <span className="stat-trend-pill">
+            <ArrowUpRight size={13} aria-hidden />
+            {trend}
+          </span>
+        ) : null}
       </div>
-      <div className="min-w-0">
+
+      <div className="stat-body">
         <p className="stat-label">{title}</p>
-        <p className="stat-value tabular truncate grad">{loading ? "—" : currency(value ?? 0)}</p>
+        <h3 className="stat-value tabular truncate">
+          {loading ? "—" : currency(value ?? 0)}
+        </h3>
+
         {rate !== null && variant === "bar" && (
           <div
-            className="stat-progress"
+            className="stat-progress-bar"
             role="progressbar"
             aria-valuenow={rate}
             aria-valuemin={0}
             aria-valuemax={100}
             aria-label={`نسبة ${title}`}
           >
-            <span style={{ width: `${rate}%` }} />
+            <div className="progress-fill" style={{ width: `${rate}%` }} />
           </div>
         )}
-        <p className="stat-hint">{hint}</p>
-      </div>
-      {rate !== null && variant === "ring" && (
-        <div className="stat-ring" role="img" aria-label={`نسبة ${title}: ${rate}%`}>
-          <svg viewBox="0 0 64 64" width="62" height="62" aria-hidden="true">
-            <circle className="ring-track" cx="32" cy="32" r="26" fill="none" strokeWidth="7" />
-            <circle
-              className="ring-fill"
-              cx="32"
-              cy="32"
-              r="26"
-              fill="none"
-              strokeWidth="7"
-              strokeLinecap="round"
-              strokeDasharray={ringLength}
-              strokeDashoffset={ringLength * (1 - rate / 100)}
-              transform="rotate(-90 32 32)"
-            />
-          </svg>
-          <strong className="tabular">{rate}%</strong>
+
+        <div className="stat-footer-hint">
+          <span className="hint-text">{hint}</span>
+          {rate !== null && variant === "bar" && (
+            <span className="hint-percent tabular font-bold">{rate}%</span>
+          )}
         </div>
-      )}
+      </div>
     </Card>
   );
 }

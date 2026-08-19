@@ -2,12 +2,14 @@ import { useState } from "react";
 import {
   BadgeCheck,
   Building2,
-  CalendarDays,
+  Calendar,
+  ChevronDown,
   Filter,
   MapPin,
   RefreshCw,
   Search,
-  WalletCards,
+  SlidersHorizontal,
+  Wallet,
   Warehouse,
   X,
 } from "lucide-react";
@@ -22,16 +24,15 @@ import {
 import { normalizeSelectOptions } from "@shared/invoiceLogic";
 import type { Invoice } from "./types";
 
-const QUICK_OPTIONS = ["الكل", "المستحق الآن", "غير مسدد", "جزئي", "مسدد"] as const;
+const QUICK_OPTIONS: { label: string; tone?: string }[] = [
+  { label: "الكل" },
+  { label: "المستحق الآن", tone: "tone-urgent" },
+  { label: "غير مسدد", tone: "tone-due" },
+  { label: "جزئي", tone: "tone-partial" },
+  { label: "مسدد", tone: "tone-paid" },
+];
 
 type FilterField = "company" | "governorate" | "warehouse" | "status";
-
-const STATUS_DOTS: Record<string, string> = {
-  "مسدد": "opt-dot tone-paid",
-  "غير مسدد": "opt-dot tone-due",
-  "جزئي": "opt-dot tone-partial",
-  "المستحق الآن": "opt-dot tone-urgent",
-};
 
 type FilterBarProps = {
   invoices: Invoice[];
@@ -84,7 +85,7 @@ export function FilterBar({
   onAmountMax,
   onReset,
 }: FilterBarProps) {
-  const [openField, setOpenField] = useState<FilterField | null>(null);
+  const [showAdvanced, setShowAdvanced] = useState(Boolean(dueFrom || dueTo || amountMin || amountMax));
 
   const optionsFor = (key: FilterField) =>
     normalizeSelectOptions(invoices.map((item) => item[key]));
@@ -99,161 +100,190 @@ export function FilterBar({
     { label: "الشركة", value: company, setter: onCompany, key: "company", icon: Building2 },
     { label: "المحافظة", value: governorate, setter: onGovernorate, key: "governorate", icon: MapPin },
     { label: "المذخر", value: warehouse, setter: onWarehouse, key: "warehouse", icon: Warehouse },
-    { label: "حالة التسديد", value: status, setter: onStatus, key: "status", icon: BadgeCheck },
+    { label: "الحالة", value: status, setter: onStatus, key: "status", icon: BadgeCheck },
   ];
 
+  const activeCount = [
+    company !== "الكل",
+    governorate !== "الكل",
+    warehouse !== "الكل",
+    status !== "الكل",
+    quick !== "الكل",
+    Boolean(search),
+    Boolean(dueFrom),
+    Boolean(dueTo),
+    Boolean(amountMin),
+    Boolean(amountMax),
+  ].filter(Boolean).length;
+
   return (
-    <div className="filter-card">
-      <div className="filter-header">
-        <div className="section-title">
-          <Filter aria-hidden />
-          <div>
-            <h3>الفلاتر</h3>
-          </div>
-          <span className="result-chip">النتائج: {resultCount}</span>
+    <div className="filter-card" dir="rtl">
+      {/* Top Header: Quick Segments + Results Counter & Controls */}
+      <div className="filter-top-row">
+        {/* Quick status tabs */}
+        <div className="quick-segments" role="group" aria-label="فلاتر سريعة">
+          {QUICK_OPTIONS.map(({ label, tone }) => {
+            const isSelected = quick === label;
+            return (
+              <button
+                key={label}
+                type="button"
+                className={`quick-pill ${isSelected ? "is-selected" : ""} ${tone || ""}`}
+                aria-pressed={isSelected}
+                onClick={() => onQuick(label)}
+              >
+                {tone && <span className="pill-dot" aria-hidden />}
+                <span>{label}</span>
+              </button>
+            );
+          })}
         </div>
-        <Button variant="ghost" size="sm" onClick={onReset}>
-          <RefreshCw size={15} aria-hidden />
-          إعادة ضبط
-        </Button>
+
+        {/* Results Badge + Advanced Toggle */}
+        <div className="filter-meta-actions">
+          <div className="results-badge">
+            <strong className="results-num">{resultCount}</strong>
+            <span className="results-text">فاتورة مطابقة</span>
+          </div>
+
+          <Button
+            type="button"
+            variant={showAdvanced ? "secondary" : "outline"}
+            size="sm"
+            onClick={() => setShowAdvanced(!showAdvanced)}
+            className={`advanced-toggle-btn h-9 text-xs font-bold gap-1.5 ${showAdvanced ? "border-teal-500/40 bg-teal-500/10 text-teal-600 dark:text-teal-400" : ""}`}
+          >
+            <SlidersHorizontal size={14} aria-hidden />
+            <span>نطاقات متقدمة</span>
+            {(dueFrom || dueTo || amountMin || amountMax) && (
+              <span className="w-2 h-2 rounded-full bg-amber-500 mr-0.5" aria-hidden />
+            )}
+          </Button>
+
+          {activeCount > 0 && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={onReset}
+              className="h-9 text-xs font-bold text-destructive hover:bg-destructive/10 gap-1"
+              title="إعادة ضبط جميع الفلاتر"
+            >
+              <RefreshCw size={12} aria-hidden />
+              <span>مسح الفلاتر ({activeCount})</span>
+            </Button>
+          )}
+        </div>
       </div>
 
-      <div className="filter-grid">
-        <div className="search-field">
-          <span className="search-ico">
-            <Search size={16} aria-hidden />
-          </span>
+      {/* Main Filter Row: Search Input + 4 Filter Dropdowns */}
+      <div className="filter-main-grid">
+        {/* Quick Search */}
+        <div className="search-box">
+          <Search size={15} className="search-icon text-muted-foreground" aria-hidden />
           <Input
             value={search}
             onChange={(e) => onSearch(e.target.value)}
-            placeholder="البحث برقم الفاتورة"
+            placeholder="بحث سريع برقم الفاتورة..."
             aria-label="البحث برقم الفاتورة"
+            className="search-input text-xs font-semibold h-10"
           />
-          {search ? (
+          {search && (
             <button
               type="button"
-              className="search-clear"
+              className="search-clear-btn"
               onClick={() => onSearch("")}
               aria-label="مسح البحث"
+              title="مسح البحث"
             >
               <X size={14} aria-hidden />
             </button>
-          ) : null}
+          )}
         </div>
 
-        {fields.map((field) => {
-          const active = field.value && field.value !== "الكل";
-          return (
-            <div
-              key={field.key}
-              className={`field${active ? " is-active" : ""}${
-                openField === field.key ? " is-open" : ""
-              }`}
-            >
-              <Select
-                value={field.value}
-                onValueChange={field.setter}
-                onOpenChange={(open) => setOpenField(open ? field.key : null)}
-              >
-                <SelectTrigger className="field-trigger" aria-label={`فلترة حسب ${field.label}`}>
-                  <span className="field-ico">
-                    <field.icon size={15} aria-hidden />
-                  </span>
-                  <span className="field-text">
-                    <span className="field-label">{field.label}</span>
-                    <span className="field-value">{active ? field.value : "عرض الكل"}</span>
-                  </span>
-                </SelectTrigger>
-                <SelectContent className="menu" align="end">
-                  <p className="menu-head">
-                    <span className="menu-head-ico">
-                      <field.icon size={14} aria-hidden />
-                    </span>
-                    اختيار {field.label}
-                  </p>
-                  <SelectItem value="الكل">عرض الكل</SelectItem>
-                  {optionsFor(field.key).map((option) => (
-<SelectItem key={option} value={option}>
-                  {field.key === "status" && (
-                    <span className={STATUS_DOTS[option] ?? "opt-dot"} aria-hidden />
-                  )}
-                  {option}
-                </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+        {/* 4 Dropdowns */}
+        <div className="dropdown-filters-row">
+          {fields.map((field) => {
+            const isActive = field.value && field.value !== "الكل";
+            return (
+              <div key={field.key} className={`filter-select-wrapper ${isActive ? "is-active" : ""}`}>
+                <Select value={field.value} onValueChange={field.setter}>
+                  <SelectTrigger className="filter-select-trigger h-10" aria-label={`فلترة حسب ${field.label}`}>
+                    <field.icon size={13} className="trigger-icon text-muted-foreground shrink-0" aria-hidden />
+                    <div className="trigger-text">
+                      <span className="trigger-label">{field.label}:</span>
+                      <span className="trigger-val">{isActive ? field.value : "الكل"}</span>
+                    </div>
+                  </SelectTrigger>
+                  <SelectContent className="filter-select-content" align="end">
+                    <SelectItem value="الكل">الكل ({field.label})</SelectItem>
+                    {optionsFor(field.key).map((option) => (
+                      <SelectItem key={option} value={option}>
+                        {option}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Collapsible Advanced Filter Ranges Drawer */}
+      {showAdvanced && (
+        <div className="advanced-ranges-panel">
+          <div className="range-item">
+            <span className="range-title">
+              <Calendar size={14} className="text-teal-500" aria-hidden />
+              <span>تاريخ الاستحقاق:</span>
+            </span>
+            <div className="range-inputs">
+              <Input
+                type="date"
+                value={dueFrom}
+                onChange={(e) => onDueFrom(e.target.value)}
+                placeholder="من تاريخ"
+                className="range-input"
+              />
+              <span className="range-arrow">←</span>
+              <Input
+                type="date"
+                value={dueTo}
+                onChange={(e) => onDueTo(e.target.value)}
+                placeholder="إلى تاريخ"
+                className="range-input"
+              />
             </div>
-          );
-        })}
-      </div>
+          </div>
 
-      <div className="filter-ranges">
-        <div className="range-group">
-          <span className="range-label">
-            <CalendarDays size={13} aria-hidden />
-            تاريخ الاستحقاق (من – إلى)
-          </span>
-          <div className="range-fields">
-            <Input
-              type="date"
-              value={dueFrom}
-              onChange={(e) => onDueFrom(e.target.value)}
-              aria-label="تاريخ الاستحقاق من"
-            />
-            <span className="range-sep" aria-hidden>
-              ←
+          <div className="range-item">
+            <span className="range-title">
+              <Wallet size={14} className="text-amber-500" aria-hidden />
+              <span>مبلغ الفاتورة (د.ع):</span>
             </span>
-            <Input
-              type="date"
-              value={dueTo}
-              onChange={(e) => onDueTo(e.target.value)}
-              aria-label="تاريخ الاستحقاق إلى"
-            />
+            <div className="range-inputs">
+              <Input
+                type="number"
+                min={0}
+                value={amountMin}
+                onChange={(e) => onAmountMin(e.target.value)}
+                placeholder="الحد الأدنى"
+                className="range-input"
+              />
+              <span className="range-arrow">←</span>
+              <Input
+                type="number"
+                min={0}
+                value={amountMax}
+                onChange={(e) => onAmountMax(e.target.value)}
+                placeholder="الحد الأقصى"
+                className="range-input"
+              />
+            </div>
           </div>
         </div>
-        <div className="range-group">
-          <span className="range-label">
-            <WalletCards size={13} aria-hidden />
-            مبلغ الفاتورة (من – إلى)
-          </span>
-          <div className="range-fields">
-            <Input
-              type="number"
-              inputMode="numeric"
-              min={0}
-              value={amountMin}
-              onChange={(e) => onAmountMin(e.target.value)}
-              placeholder="الحد الأدنى"
-              aria-label="المبلغ من"
-            />
-            <span className="range-sep" aria-hidden>
-              ←
-            </span>
-            <Input
-              type="number"
-              inputMode="numeric"
-              min={0}
-              value={amountMax}
-              onChange={(e) => onAmountMax(e.target.value)}
-              placeholder="الحد الأقصى"
-              aria-label="المبلغ إلى"
-            />
-          </div>
-        </div>
-      </div>
-
-      <div className="quick-segment" role="group" aria-label="فلاتر سريعة">
-        {QUICK_OPTIONS.map((item) => (
-          <button
-            key={item}
-            className={quick === item ? "selected" : ""}
-            aria-pressed={quick === item}
-            onClick={() => onQuick(item)}
-          >
-            {item}
-          </button>
-        ))}
-      </div>
+      )}
     </div>
   );
 }
