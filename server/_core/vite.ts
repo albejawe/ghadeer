@@ -9,7 +9,7 @@ import viteConfig from "../../vite.config";
 export async function setupVite(app: Express, server: Server) {
   const serverOptions = {
     middlewareMode: true,
-    hmr: false,
+    hmr: { server },
     allowedHosts: true as const,
   };
 
@@ -38,12 +38,7 @@ export async function setupVite(app: Express, server: Server) {
         `src="/src/main.tsx"`,
         `src="/src/main.tsx?v=${nanoid()}"`
       );
-      let page = await vite.transformIndexHtml(url, template);
-      if (serverOptions.hmr === false) {
-        page = page.replace('<script type="module" src="/@vite/client"></script>', '');
-        const reactPreamble = `<script>window.$RefreshReg$=window.$RefreshReg$||function(){};window.$RefreshSig$=window.$RefreshSig$||function(){return function(type){return type;}};window.__vite_plugin_react_preamble_installed__=true;</script>`;
-        page = page.replace("</head>", `${reactPreamble}</head>`);
-      }
+      const page = await vite.transformIndexHtml(url, template);
       res.status(200).set({ "Content-Type": "text/html" }).end(page);
     } catch (e) {
       vite.ssrFixStacktrace(e as Error);

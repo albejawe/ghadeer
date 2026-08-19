@@ -30,13 +30,14 @@ const app = buildApp();
 export default app;
 
 async function startServer() {
+  const server = createServer(app);
+
   if (process.env.NODE_ENV === "development") {
-    await setupVite(app, createServer(app));
+    await setupVite(app, server);
   } else {
     serveStatic(app);
   }
 
-  const server = createServer(app);
   const preferredPort = parseInt(process.env.PORT || "3000");
   const port = await findAvailablePort(preferredPort);
 
