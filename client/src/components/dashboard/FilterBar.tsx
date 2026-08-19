@@ -173,10 +173,12 @@ export function FilterBar({
                   </p>
                   <SelectItem value="الكل">عرض الكل</SelectItem>
                   {optionsFor(field.key).map((option) => (
-                    <SelectItem key={option} value={option}>
-                      <span className={STATUS_DOTS[option] ?? "opt-dot"} aria-hidden />
-                      {option}
-                    </SelectItem>
+<SelectItem key={option} value={option}>
+                  {field.key === "status" && (
+                    <span className={STATUS_DOTS[option] ?? "opt-dot"} aria-hidden />
+                  )}
+                  {option}
+                </SelectItem>
                   ))}
                 </SelectContent>
               </Select>

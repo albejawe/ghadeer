@@ -804,16 +804,39 @@
   border-color: var(--line-strong);
   background: var(--muted);
 }
-.app-shell [data-slot="select-content"] {
+/* =============================================================================
+   Selects — dropdown surface (portal-safe: Radix renders in <body>, NOT inside
+   .app-shell, so these rules must NOT be scoped under .app-shell)
+   =========================================================================== */
+[data-slot="select-content"] {
   direction: rtl;
   background: var(--popover);
+  border: 1px solid var(--line-strong);
+  border-radius: 14px;
+  box-shadow: var(--shadow-pop);
+  padding: 6px;
+  font-family: inherit;
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
-  border-radius: 16px;
-  border-color: var(--line-strong);
-  box-shadow: var(--shadow-pop);
-  font-family: inherit;
-  padding: 6px;
+}
+[data-slot="select-content"] [data-slot="select-item"] {
+  font-size: 12.5px;
+  font-weight: 600;
+  padding-block: 9px;
+  padding-inline: 11px;
+  margin-inline: 2px;
+  border-radius: 9px;
+  color: var(--ink);
+  transition: background 0.14s ease, color 0.14s ease;
+}
+[data-slot="select-content"] [data-slot="select-item"][data-highlighted] {
+  background: var(--teal-soft);
+  color: var(--brand-strong);
+}
+[data-slot="select-content"] [data-slot="select-item"][data-state="checked"] {
+  background: var(--brand-soft);
+  color: var(--brand-strong);
+  font-weight: 800;
 }
 .select-heading {
   display: flex;
@@ -831,50 +854,34 @@
   width: 13px;
   height: 13px;
 }
-.app-shell [data-slot="select-content"] [data-slot="select-item"] {
-  font-size: 12.5px;
-  padding-block: 9px;
-  margin-inline: 2px;
-  border-radius: 10px;
-}
-.app-shell [data-slot="select-content"] [data-slot="select-item"][data-highlighted] {
-  background: var(--teal-soft);
-  color: var(--brand-strong);
-}
-.app-shell [data-slot="select-content"] [data-slot="select-item"][data-state="checked"] {
-  background: color-mix(in srgb, var(--brand-soft) 65%, transparent);
-  color: var(--brand-strong);
-  font-weight: 800;
-}
 
 /* =============================================================================
-   Filters v8 — cards fields + command menus (scoped to .filter-grid only)
+   Filters — compact clean bar (v9): slimmer 46px fields, lighter chips
    =========================================================================== */
 .app-shell .filter-grid [data-slot="select-trigger"] {
   width: 100%;
-  min-height: 54px;
-  gap: 10px;
-  padding: 8px 12px;
-  border-radius: 16px;
-  border-color: var(--line-strong);
+  min-height: 46px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 6px 10px;
+  border-radius: 12px;
+  border-color: var(--line);
   background: var(--card);
   box-shadow: none;
   transition:
-    border-color 0.16s ease,
-    box-shadow 0.16s ease,
-    transform 0.16s ease,
-    background 0.16s ease;
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    background 0.15s ease;
 }
 .app-shell .filter-grid [data-slot="select-trigger"]:hover {
   border-color: var(--brand-ring);
   background: var(--card);
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-1);
 }
 .app-shell .filter-grid [data-slot="select-trigger"]:focus-visible,
 .app-shell .filter-grid .field.is-open [data-slot="select-trigger"] {
   border-color: var(--brand-ring);
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--brand-ring) 16%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-ring) 14%, transparent);
   background: var(--card);
 }
 .app-shell .filter-grid [data-slot="select-trigger"] > svg:last-child {
@@ -891,18 +898,18 @@
 .app-shell .filter-grid .field-ico,
 .app-shell .filter-grid .search-ico {
   flex: 0 0 auto;
-  width: 30px;
-  height: 30px;
+  width: 26px;
+  height: 26px;
   display: grid;
   place-items: center;
-  border-radius: 9px;
+  border-radius: 8px;
   background: var(--brand-soft);
   color: var(--brand);
 }
 .app-shell .filter-grid .field-ico svg,
 .app-shell .filter-grid .search-ico svg {
-  width: 15px;
-  height: 15px;
+  width: 14px;
+  height: 14px;
 }
 .app-shell .filter-grid .field.is-active .field-ico {
   background: var(--brand);
@@ -912,7 +919,7 @@
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 1px;
+  gap: 2px;
   flex: 1;
   min-width: 0;
 }
@@ -920,7 +927,7 @@
   font-size: 10px;
   font-weight: 800;
   color: var(--brand);
-  opacity: 0.7;
+  opacity: 0.65;
   line-height: 1;
 }
 .app-shell .filter-grid .field.is-active .field-label {
@@ -928,7 +935,7 @@
 }
 .app-shell .filter-grid .field-value {
   font-size: 12.5px;
-  font-weight: 800;
+  font-weight: 700;
   color: var(--ink);
   line-height: 1.25;
   max-width: 100%;
@@ -937,97 +944,101 @@
   white-space: nowrap;
 }
 .app-shell .filter-grid .search-field {
-  gap: 10px;
-  min-height: 54px;
-  padding: 8px 12px;
-  border-radius: 16px;
-  border-color: var(--line-strong);
+  gap: 9px;
+  min-height: 46px;
+  padding: 6px 10px;
+  border-radius: 12px;
+  border-color: var(--line);
 }
 .app-shell .filter-grid .search-field:focus-within {
   border-color: var(--brand-ring);
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--brand-ring) 16%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-ring) 14%, transparent);
 }
 .app-shell .filter-grid .search-field input {
   flex: 1;
   min-width: 0;
-  min-height: 36px;
+  min-height: 30px;
   padding-inline: 0;
   border: 0;
   box-shadow: none;
   font-size: 13px;
-  font-weight: 800;
+  font-weight: 700;
 }
 .app-shell .filter-grid .search-clear {
   flex: 0 0 auto;
-  width: 28px;
-  height: 28px;
+  width: 24px;
+  height: 24px;
   display: grid;
   place-items: center;
   padding: 0;
-  border-radius: 9px;
+  border-radius: 8px;
   background: var(--muted);
   color: var(--ink-3);
-  transition: background 0.16s ease, color 0.16s ease;
+  transition: background 0.15s ease, color 0.15s ease;
 }
 .app-shell .filter-grid .search-clear:hover {
   background: var(--teal-soft);
   color: var(--brand-strong);
 }
-.app-shell .filter-grid .menu {
-  min-width: 240px;
+[data-slot="select-content"].menu {
+  min-width: 210px;
+  max-width: 300px;
 }
-.app-shell .filter-grid .menu-head {
+[data-slot="select-content"] .menu-head {
   display: flex;
   align-items: center;
-  gap: 9px;
-  padding: 8px 10px 10px;
-  margin-bottom: 6px;
-  border-bottom: 1px dashed var(--line);
-  color: var(--ink-2);
-  font-size: 12px;
+  gap: 8px;
+  padding: 7px 10px 9px;
+  margin-bottom: 5px;
+  border-bottom: 1px solid var(--line);
+  color: var(--ink-3);
+  font-size: 11px;
   font-weight: 800;
 }
-.app-shell .filter-grid .menu-head-ico {
+[data-slot="select-content"] .menu-head-ico {
   flex: 0 0 auto;
-  width: 26px;
-  height: 26px;
+  width: 22px;
+  height: 22px;
   display: grid;
   place-items: center;
-  border-radius: 8px;
+  border-radius: 7px;
   background: var(--brand-soft);
   color: var(--brand);
 }
-.app-shell .filter-grid .menu-head-ico svg {
-  width: 14px;
-  height: 14px;
+[data-slot="select-content"] .menu-head-ico svg {
+  width: 13px;
+  height: 13px;
 }
-.app-shell .filter-grid .opt-dot {
+[data-slot="select-content"] .opt-dot {
   flex: 0 0 auto;
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
   background: var(--ink-3);
 }
-.app-shell .filter-grid .opt-dot.tone-paid {
+[data-slot="select-content"] .opt-dot.tone-paid {
   background: #16a34a;
 }
-.app-shell .filter-grid .opt-dot.tone-due {
+[data-slot="select-content"] .opt-dot.tone-due {
   background: #e11d48;
 }
-.app-shell .filter-grid .opt-dot.tone-partial {
+[data-slot="select-content"] .opt-dot.tone-partial {
   background: #f59e0b;
 }
-.app-shell .filter-grid .opt-dot.tone-urgent {
+[data-slot="select-content"] .opt-dot.tone-urgent {
   background: #d97706;
 }
-.app-shell .filter-grid .menu [data-slot="select-item"] {
-  padding-block: 10px;
+[data-slot="select-content"].menu [data-slot="select-item"] {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-block: 9px;
   padding-inline: 10px;
   margin-inline: 0;
-  border-radius: 12px;
+  border-radius: 10px;
   font-weight: 700;
 }
-.app-shell .filter-grid .menu [data-slot="select-item"][data-state="checked"] {
+[data-slot="select-content"].menu [data-slot="select-item"][data-state="checked"] {
   background: var(--brand-soft);
   color: var(--brand-strong);
 }
