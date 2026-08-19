@@ -1447,79 +1447,38 @@
 }
 
 /* Mobile Cards View */
-.mobile-cards-view {
-  display: none;
-  padding: 14px;
-  flex-direction: column;
-  gap: 12px;
+.table-scroll {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  display: block;
 }
-@media (max-width: 820px) {
-  .table-scroll {
-    display: none;
+@media (max-width: 768px) {
+  .table-header {
+    padding: 12px 14px !important;
+    gap: 8px !important;
   }
-  .mobile-cards-view {
-    display: flex;
+  .table-tools {
+    gap: 6px !important;
   }
-}
-.invoice-mobile-card {
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  padding: 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  box-shadow: var(--shadow-sm);
-}
-.invoice-mobile-card.is-overdue {
-  border-color: rgba(239, 68, 68, 0.4);
-}
-.card-top {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-}
-.card-sub-meta {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: 4px;
-}
-.meta-tag {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 11px;
-  color: var(--muted-foreground);
-}
-.card-amounts-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-  background: var(--muted);
-  padding: 10px 12px;
-  border-radius: 10px;
-}
-.amount-col {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.amount-lbl {
-  font-size: 10px;
-  color: var(--muted-foreground);
-  font-weight: 700;
-}
-.amount-val {
-  font-size: 13px;
-  font-weight: 800;
-}
-.card-footer-actions {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  border-top: 1px solid var(--border);
-  padding-top: 10px;
+  .table-tools button {
+    height: 32px !important;
+    padding: 0 8px !important;
+    font-size: 11px !important;
+  }
+  .invoices-data-table th,
+  .invoices-data-table td {
+    padding: 8px 10px !important;
+    font-size: 12px !important;
+    white-space: nowrap !important;
+  }
+  .company-cell strong {
+    font-size: 12.5px !important;
+  }
+  .invoice-number-pill {
+    font-size: 11px !important;
+    padding: 2px 6px !important;
+  }
 }
 
 /* Empty State */

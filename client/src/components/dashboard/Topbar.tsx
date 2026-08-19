@@ -1,4 +1,4 @@
-import { LayoutDashboard, Link2, Menu, MoonStar, RefreshCw, Sun } from "lucide-react";
+import { Menu, MoonStar, RefreshCw, Sun } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "@/contexts/ThemeContext";
 import { sidebarAriaLabel, toggleSidebar } from "@/lib/sidebarState";
@@ -20,7 +20,6 @@ type TopbarProps = {
 };
 
 export function Topbar({
-  view,
   syncing,
   lastSync,
   mobileOpen,
@@ -42,30 +41,12 @@ export function Topbar({
           aria-label={sidebarAriaLabel(mobileOpen)}
           aria-expanded={mobileOpen}
         >
-          <Menu size={19} aria-hidden />
+          <Menu size={20} aria-hidden />
         </button>
-
-        <div className="breadcrumbs">
-          <span className="breadcrumb-root hidden sm:inline">غدير المحاسبي</span>
-          <span className="breadcrumb-sep hidden sm:inline" aria-hidden>/</span>
-          <span className="breadcrumb-current">
-            {view === "dashboard" ? (
-              <>
-                <LayoutDashboard size={14} className="text-teal-600 dark:text-teal-400 inline ml-1" />
-                <span>الحسابات</span>
-              </>
-            ) : (
-              <>
-                <Link2 size={14} className="text-teal-600 dark:text-teal-400 inline ml-1" />
-                <span>الروابط</span>
-              </>
-            )}
-          </span>
-        </div>
       </div>
 
       <div className="topbar-actions">
-        {/* PWA Install Button (Desktop Only to save mobile space) */}
+        {/* PWA Install Button (Desktop Only) */}
         <div className="hidden md:block">
           <PwaInstallHeaderButton />
         </div>
