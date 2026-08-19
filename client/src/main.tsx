@@ -8,6 +8,16 @@ import App from "./App";
 import { startLogin } from "./const";
 import "./index.css";
 
+// Detect PWA standalone mode (especially for iOS / Android safe areas)
+if (typeof window !== "undefined") {
+  const isStandalone =
+    window.matchMedia("(display-mode: standalone)").matches ||
+    (window.navigator as unknown as { standalone?: boolean }).standalone === true;
+  if (isStandalone) {
+    document.documentElement.classList.add("is-standalone-pwa");
+  }
+}
+
 const queryClient = new QueryClient();
 
 const redirectToLoginIfUnauthorized = (error: unknown) => {
