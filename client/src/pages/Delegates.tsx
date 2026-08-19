@@ -37,115 +37,15 @@ import { currency } from "@/components/dashboard/types";
 import { Topbar } from "@/components/dashboard/Topbar";
 import { toast } from "sonner";
 
-export type DelegateStockRecord = {
-  id: string;
-  delegateName: string;
-  phone: string;
-  governorate: string;
-  company: string;
-  item: string;
-  prevStock: number;
-  currentStock: number;
-  salesAmount: number;
-  governorateTarget: number;
-  note?: string;
-  date: string;
-};
+import { DelegateStockRecord, INITIAL_DELEGATES_DATA } from "./delegatesData";
 
-const INITIAL_DELEGATES_DATA: DelegateStockRecord[] = [
-  {
-    id: "del-1",
-    delegateName: "علي حسين العبيدي",
-    phone: "07701234567",
-    governorate: "بغداد",
-    company: "شركة الشفاء الدوائية",
-    item: "بانادول إكسترا 500 ملغم",
-    prevStock: 1200,
-    currentStock: 450,
-    salesAmount: 18750000,
-    governorateTarget: 25000000,
-    note: "توزيع مباشر لمذاخر بغداد / الكرخ",
-    date: new Date().toISOString().slice(0, 10),
-  },
-  {
-    id: "del-2",
-    delegateName: "حيدر كاظم الشمري",
-    phone: "07809876543",
-    governorate: "البصرة",
-    company: "شركة النور الطبية",
-    item: "أموكسيسيلين 500 كبسول",
-    prevStock: 850,
-    currentStock: 120,
-    salesAmount: 24600000,
-    governorateTarget: 30000000,
-    note: "تغطية كاملة لمذاخر العشار والجبيلة",
-    date: new Date().toISOString().slice(0, 10),
-  },
-  {
-    id: "del-3",
-    delegateName: "مصطفى جبار الربيعي",
-    phone: "07503332211",
-    governorate: "أربيل",
-    company: "شركة الأمل للمستلزمات",
-    item: "سيروم نورمال سلاين 500 مل",
-    prevStock: 2000,
-    currentStock: 600,
-    salesAmount: 31500000,
-    governorateTarget: 40000000,
-    note: "طلبيات كبرى لمذاخر كوردستان",
-    date: new Date().toISOString().slice(0, 10),
-  },
-  {
-    id: "del-4",
-    delegateName: "عمر فاروق الحديثي",
-    phone: "07715554433",
-    governorate: "الأنبار",
-    company: "شركة سامراء للأدوية (SDI)",
-    item: "بروفين شراب أطفال 100 مل",
-    prevStock: 600,
-    currentStock: 150,
-    salesAmount: 14800000,
-    governorateTarget: 20000000,
-    note: "مذاخر الرمادي والفلوجة",
-    date: new Date().toISOString().slice(0, 10),
-  },
-  {
-    id: "del-5",
-    delegateName: "كرار جاسم المالكي",
-    phone: "07812223344",
-    governorate: "النجف",
-    company: "شركة دار الحكمة",
-    item: "أوجمنتين 1 غم أقراص",
-    prevStock: 950,
-    currentStock: 280,
-    salesAmount: 21200000,
-    governorateTarget: 25000000,
-    note: "سداد شبه كامل وتوزيع دوري",
-    date: new Date().toISOString().slice(0, 10),
-  },
-  {
-    id: "del-6",
-    delegateName: "ياسر عمار السعدي",
-    phone: "07709998877",
-    governorate: "كربلاء",
-    company: "شركة الفيحاء الدوائية",
-    item: "فيتامين سي فوار 1000 ملغم",
-    prevStock: 1500,
-    currentStock: 350,
-    salesAmount: 16400000,
-    governorateTarget: 20000000,
-    note: "موسم الزيارات والطلب المرتفع",
-    date: new Date().toISOString().slice(0, 10),
-  },
-];
-
-const LOCAL_STORAGE_KEY = "hisabati_delegates_data_v1";
+const LOCAL_STORAGE_KEY = "hisabati_delegates_data_v3";
 
 const emptyFormRecord = (): Omit<DelegateStockRecord, "id"> => ({
-  delegateName: "",
-  phone: "",
-  governorate: "بغداد",
-  company: "",
+  delegateName: "أحمد علي حسين",
+  phone: "07801234567",
+  governorate: "الكوت",
+  company: "LDP",
   item: "",
   prevStock: 0,
   currentStock: 0,
@@ -763,22 +663,34 @@ export function Delegates() {
               <label>
                 <span>المحافظة <strong className="text-red-500">*</strong></span>
                 <Input
+                  list="dlg-gov-options"
                   value={form.governorate}
                   onChange={(e) => setForm({ ...form, governorate: e.target.value })}
-                  placeholder="مثال: بغداد"
+                  placeholder="اختر أو اكتب المحافظة"
                   required
                 />
+                <datalist id="dlg-gov-options">
+                  <option value="الكوت" />
+                  <option value="البصرة" />
+                  <option value="الناصرية" />
+                  <option value="العمارة" />
+                </datalist>
               </label>
 
               {/* الشركة */}
               <label>
                 <span>الشركة <strong className="text-red-500">*</strong></span>
                 <Input
+                  list="dlg-company-options"
                   value={form.company}
                   onChange={(e) => setForm({ ...form, company: e.target.value })}
-                  placeholder="مثال: شركة الشفاء الدوائية"
+                  placeholder="LDP أو MEDREICH"
                   required
                 />
+                <datalist id="dlg-company-options">
+                  <option value="LDP" />
+                  <option value="MEDREICH" />
+                </datalist>
               </label>
 
               {/* المادة */}
