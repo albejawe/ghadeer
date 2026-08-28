@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import {
+  Activity,
   AlertCircle,
   AlertTriangle,
   ArrowDown,
@@ -32,6 +33,7 @@ import {
   Pencil,
   PieChart as PieChartIcon,
   Plus,
+  Radio,
   RefreshCw,
   Search,
   Share2,
@@ -67,26 +69,6 @@ import {
   Area,
   CartesianGrid,
 } from "recharts";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useTheme } from "@/contexts/ThemeContext";
 import { toast } from "sonner";
 import {
@@ -105,9 +87,7 @@ import {
   filterSalesRecords,
   GovernoratePerformance,
 } from "@/lib/analyticsEngine";
-
-const DEFAULT_GOOGLE_SHEET_URL =
-  "https://docs.google.com/spreadsheets/d/1AbC_Example_Sheet_ID/edit";
+import "./testDashboard.css";
 
 const INITIAL_FILTERS: FilterState = {
   selectedMonthKey: "all",
@@ -149,28 +129,13 @@ export function TestDashboard() {
   const [filters, setFilters] = useState<FilterState>(INITIAL_FILTERS);
 
   // Active View Tab
-  const [activeTab, setActiveTab] = useState("table");
+  const [activeTab, setActiveTab] = useState<"table" | "delegates" | "products" | "companies" | "timeline">("table");
 
   // Table Pagination & Sorting
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(15);
   const [sortField, setSortField] = useState<keyof UnifiedSaleRecord>("date");
   const [sortAsc, setSortAsc] = useState(false);
-
-  // Visible Columns in Table
-  const [visibleColumns, setVisibleColumns] = useState({
-    delegateName: true,
-    governorate: true,
-    company: true,
-    item: true,
-    quantity: true,
-    unitPrice: true,
-    totalAmount: true,
-    date: true,
-    governorateTarget: true,
-    achievementRate: true,
-    sheetSource: true,
-  });
 
   // Load Data on Mount or URL change
   const loadData = async (urlToUse?: string) => {
@@ -179,12 +144,10 @@ export function TestDashboard() {
       const result = await fetchGoogleSpreadsheetData(urlToUse || sheetUrl);
       setData(result);
       if (result.sourceType === "live-sheets") {
-        toast.success("تم تحديث البيانات مباشرة من Google Sheets بنجاح");
-      } else {
-        toast.info("تم تحميل البيانات الموثقة للنظام (جاهز لربط Google Sheets)");
+        toast.success("تم الاتصال وتحديث البيانات من Google Sheets بنجاح");
       }
     } catch (err) {
-      toast.error("تعذر جلب البيانات من الرابط، تم استخدام البيانات الاحتياطية");
+      toast.error("تعذر جلب البيانات، تم الاعتماد على البيانات الموثقة");
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -381,131 +344,94 @@ export function TestDashboard() {
     }));
   }, [govPerformances]);
 
-  const topProductsChartData = useMemo(() => {
-    return productsPerformance.slice(0, 6).map((p) => ({
-      name: p.item,
-      "إجمالي المبيعات": p.totalRevenue,
-      "الكمية المباعة": p.totalQuantity,
-    }));
-  }, [productsPerformance]);
-
-  if (loading && !data) {
-    return (
-      <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6" dir="rtl">
-        <div className="flex flex-col items-center gap-4 text-center max-w-md">
-          <div className="w-16 h-16 rounded-2xl bg-teal-500/10 text-teal-600 dark:text-teal-400 grid place-items-center animate-pulse">
-            <RefreshCw size={32} className="animate-spin" />
-          </div>
-          <h2 className="text-xl font-bold text-foreground">جاري جلب وتحليل البيانات الذكية...</h2>
-          <p className="text-sm text-muted-foreground">
-            نقوم بمسح الـ 8 صفحات وتوحيد سجلات المبيعات والمندوبين وتدقيق جودة البيانات.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen bg-slate-50/60 dark:bg-slate-950 text-foreground transition-colors duration-200" dir="rtl">
-      {/* Top Navbar */}
-      <header className="sticky top-0 z-40 border-b border-border/80 bg-background/90 backdrop-blur-md px-4 sm:px-6 py-3">
-        <div className="max-w-[1560px] mx-auto flex flex-wrap items-center justify-between gap-3">
-          {/* Brand & Mode */}
-          <div className="flex items-center gap-3">
+    <div className="analytics-command-page">
+      {/* Top Futuristic Command Header */}
+      <header className="command-header">
+        <div className="header-container">
+          <div className="command-brand">
             <Link
-              href="/dashboard"
-              className="w-9 h-9 rounded-xl bg-muted hover:bg-secondary grid place-items-center text-foreground transition-colors"
-              title="العودة للحسابات والمذاخر"
+              href="/"
+              className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-teal-500/20 hover:text-teal-600 grid place-items-center transition-all text-slate-700 dark:text-slate-200"
+              title="العودة للرئيسية"
             >
               <ArrowRight size={18} />
             </Link>
 
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-lg sm:text-xl font-black text-foreground tracking-tight">
-                  مراقبة الأداء والمبيعات الميدانية
-                </h1>
-                <Badge variant="outline" className="bg-teal-500/10 text-teal-700 dark:text-teal-300 border-teal-500/30 text-xs font-bold py-0.5">
-                  <Sparkles size={11} className="ml-1 text-teal-500" />
-                  تحليلات ذكية
-                </Badge>
-              </div>
-              <p className="text-xs text-muted-foreground hidden sm:block">
-                متابعة أداء المندوبين والمحافظات والشركات عبر Google Sheets
-              </p>
+            <div className="command-logo-glow">
+              <Sparkles size={22} />
+            </div>
+
+            <div className="command-title-group">
+              <h1>
+                <span>غدير — التحليل الذكي والمراقبة الميدانية</span>
+                <span className="status-pill pill-teal text-[10px]">
+                  <Activity size={10} className="animate-pulse" /> مباشر
+                </span>
+              </h1>
+              <p>نظام ذكي متصل بـ Google Sheets لمراقبة مبيعات المندوبين والمحافظات</p>
             </div>
           </div>
 
           {/* Right Action Tools */}
-          <div className="flex items-center gap-2 flex-wrap">
-            {/* Live Data Source Pill */}
+          <div className="flex items-center gap-2.5 flex-wrap">
+            {/* Live Data Source Connector Pill */}
             <button
               onClick={() => {
                 setTempUrlInput(sheetUrl);
                 setConfigModalOpen(true);
               }}
-              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all bg-card hover:bg-secondary border-border"
-              title="تعديل رابط Google Sheets"
+              className="glass-btn"
+              title="إعدادات Google Sheets"
             >
-              <span className={`w-2 h-2 rounded-full ${data?.sourceType === "live-sheets" ? "bg-emerald-500 animate-pulse" : "bg-teal-500"}`} />
-              <span className="text-foreground">
-                {data?.sourceType === "live-sheets" ? "Google Sheets مباشر" : "البيانات الموثقة"}
-              </span>
-              <span className="text-[10px] text-muted-foreground hidden md:inline">
-                ({data?.lastUpdated})
-              </span>
-              <ExternalLink size={12} className="text-muted-foreground mr-0.5" />
+              <span className={`w-2.5 h-2.5 rounded-full ${data?.sourceType === "live-sheets" ? "bg-emerald-500 animate-pulse" : "bg-teal-500"}`} />
+              <span>{data?.sourceType === "live-sheets" ? "Google Sheets متصل" : "البيانات الموثقة"}</span>
+              <span className="text-[11px] text-slate-400 font-mono">({data?.lastUpdated || "00:00"})</span>
+              <ExternalLink size={12} className="text-slate-400 mr-1" />
             </button>
 
-            {/* Month / Period Selector */}
-            <Select
+            {/* Period Selector */}
+            <select
               value={filters.selectedMonthKey}
-              onValueChange={(val) => setFilters({ ...filters, selectedMonthKey: val })}
+              onChange={(e) => setFilters({ ...filters, selectedMonthKey: e.target.value })}
+              className="filter-custom-select text-xs font-bold"
+              style={{ width: "auto", minWidth: "150px" }}
             >
-              <SelectTrigger className="h-9 min-w-[130px] text-xs font-bold bg-card border-border">
-                <SelectValue placeholder="الفترة الزمنية" />
-              </SelectTrigger>
-              <SelectContent align="end">
-                <SelectItem value="all">جميع الفترات (الكل)</SelectItem>
-                {data?.availableMonths.map((m) => (
-                  <SelectItem key={`${m.year}-${m.month}`} value={`${m.year}-${m.month}`}>
-                    {m.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              <option value="all">جميع الفترات الزمنية</option>
+              {data?.availableMonths.map((m) => (
+                <option key={`${m.year}-${m.month}`} value={`${m.year}-${m.month}`}>
+                  {m.label}
+                </option>
+              ))}
+            </select>
 
             {/* Refresh Button */}
-            <Button
-              variant="outline"
-              size="sm"
+            <button
               onClick={handleRefresh}
               disabled={refreshing}
-              className="h-9 px-3 text-xs font-bold border-border"
+              className="glass-btn"
               title="تحديث البيانات"
             >
-              <RefreshCw size={14} className={refreshing ? "animate-spin text-teal-500 ml-1" : "ml-1"} />
-              <span className="hidden sm:inline">تحديث</span>
-            </Button>
+              <RefreshCw size={14} className={refreshing ? "animate-spin text-teal-500" : ""} />
+              <span>تحديث</span>
+            </button>
 
             {/* Export Report */}
-            <Button
-              variant="outline"
-              size="sm"
+            <button
               onClick={exportToExcel}
-              className="h-9 px-3 text-xs font-bold text-emerald-700 dark:text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/10"
-              title="تصدير تقرير شامل إلى Excel"
+              className="glass-btn btn-accent"
+              title="تصدير تقرير Excel"
             >
-              <FileSpreadsheet size={14} className="ml-1 text-emerald-600" />
-              <span className="hidden md:inline">تصدير Excel</span>
-            </Button>
+              <FileSpreadsheet size={14} />
+              <span>تصدير Excel</span>
+            </button>
 
             {/* Theme Toggle */}
             {toggleTheme && (
               <button
                 onClick={toggleTheme}
-                className="w-9 h-9 rounded-xl border border-border bg-card hover:bg-secondary grid place-items-center text-foreground transition-colors"
-                title="تبديل الوضع الليلي / الفاتح"
+                className="w-9 h-9 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 grid place-items-center transition-all cursor-pointer"
+                title="تبديل الوضع"
               >
                 {theme === "dark" ? (
                   <Sun size={16} className="text-amber-400" />
@@ -518,127 +444,131 @@ export function TestDashboard() {
         </div>
       </header>
 
-      {/* Main Container */}
-      <main className="max-w-[1560px] mx-auto p-4 sm:p-6 space-y-6">
+      {/* Main Command Center Container */}
+      <main style={{ maxWidth: 1600, margin: "0 auto", padding: "24px 20px" }} className="space-y-6">
         {/* =========================================================================
-            SECTION 1: Executive KPI Cards (Top Metrics)
+            SECTION 1: Executive Futuristic KPI Glow Cards
             ========================================================================= */}
         {kpis && (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
-            {/* Total Sales */}
-            <Card className="p-4 sm:p-5 border-border bg-gradient-to-br from-card to-teal-50/20 dark:to-teal-950/20 relative overflow-hidden shadow-sm">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-bold text-muted-foreground">إجمالي المبيعات</span>
-                <div className="w-8 h-8 rounded-lg bg-teal-500/10 text-teal-600 dark:text-teal-400 grid place-items-center">
-                  <Wallet size={16} />
+          <div className="kpi-command-grid">
+            {/* 1. Total Sales */}
+            <div className="kpi-glow-card">
+              <div className="kpi-card-header">
+                <span className="kpi-card-title">إجمالي المبيعات المحققة</span>
+                <div className="kpi-icon-pill">
+                  <Wallet size={18} />
                 </div>
               </div>
-              <h3 className="text-xl sm:text-2xl font-black text-foreground tracking-tight tabular">
+              <div className="kpi-card-value text-teal-600 dark:text-teal-400">
                 {currency(kpis.totalSales)}
-              </h3>
-              <div className="flex items-center gap-1.5 mt-2 text-xs font-semibold text-teal-600 dark:text-teal-400">
-                <TrendingUp size={14} />
-                <span>{kpis.transactionCount} حركة مبيعات مسجلة</span>
               </div>
-            </Card>
+              <div className="kpi-card-footer">
+                <span className="text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                  <TrendingUp size={14} className="text-teal-500" />
+                  {kpis.transactionCount} حركة بيع مسجلة
+                </span>
+                <span className="text-xs font-bold text-teal-600 dark:text-teal-400">
+                  {((kpis.totalSales / (kpis.totalTarget || 1)) * 100).toFixed(1)}% من التارغت
+                </span>
+              </div>
+            </div>
 
-            {/* Total Units */}
-            <Card className="p-4 sm:p-5 border-border bg-gradient-to-br from-card to-blue-50/20 dark:to-blue-950/20 relative overflow-hidden shadow-sm">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-bold text-muted-foreground">إجمالي القطع المباعة</span>
-                <div className="w-8 h-8 rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400 grid place-items-center">
-                  <Boxes size={16} />
+            {/* 2. Total Quantity */}
+            <div className="kpi-glow-card">
+              <div className="kpi-card-header">
+                <span className="kpi-card-title">إجمالي القطع المباعة</span>
+                <div className="kpi-icon-pill" style={{ background: "rgba(59, 130, 246, 0.15)", color: "#3B82F6" }}>
+                  <Boxes size={18} />
                 </div>
               </div>
-              <h3 className="text-xl sm:text-2xl font-black text-foreground tracking-tight tabular">
+              <div className="kpi-card-value text-blue-600 dark:text-blue-400">
                 {kpis.totalQuantity.toLocaleString()} قطعة
-              </h3>
-              <div className="flex items-center gap-1.5 mt-2 text-xs font-semibold text-blue-600 dark:text-blue-400">
-                <Package size={14} />
-                <span>عبر {kpis.productsCount} مادة دوائية</span>
               </div>
-            </Card>
+              <div className="kpi-card-footer">
+                <span className="text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                  <Package size={14} className="text-blue-500" />
+                  عبر {kpis.productsCount} مادة دوائية
+                </span>
+                <span className="text-xs font-bold text-blue-600 dark:text-blue-400">
+                  {kpis.companiesCount} شركات موردة
+                </span>
+              </div>
+            </div>
 
-            {/* Total Target */}
-            <Card className="p-4 sm:p-5 border-border bg-gradient-to-br from-card to-indigo-50/20 dark:to-indigo-950/20 relative overflow-hidden shadow-sm">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-bold text-muted-foreground">التارغت الإجمالي</span>
-                <div className="w-8 h-8 rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 grid place-items-center">
-                  <Target size={16} />
+            {/* 3. Total Target */}
+            <div className="kpi-glow-card">
+              <div className="kpi-card-header">
+                <span className="kpi-card-title">التارغت الإجمالي المستهدف</span>
+                <div className="kpi-icon-pill" style={{ background: "rgba(139, 92, 246, 0.15)", color: "#8B5CF6" }}>
+                  <Target size={18} />
                 </div>
               </div>
-              <h3 className="text-xl sm:text-2xl font-black text-foreground tracking-tight tabular">
+              <div className="kpi-card-value text-indigo-600 dark:text-indigo-400">
                 {currency(kpis.totalTarget)}
-              </h3>
-              <div className="flex items-center gap-1.5 mt-2 text-xs font-semibold text-indigo-600 dark:text-indigo-400">
-                <MapPin size={14} />
-                <span>لـ {kpis.governoratesCount} محافظات مستهدفة</span>
               </div>
-            </Card>
+              <div className="kpi-card-footer">
+                <span className="text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                  <MapPin size={14} className="text-indigo-500" />
+                  لـ {kpis.governoratesCount} محافظات
+                </span>
+                <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400">
+                  {kpis.delegatesCount} مندوب ومذخر
+                </span>
+              </div>
+            </div>
 
-            {/* Achievement Rate */}
-            <Card className="p-4 sm:p-5 border-border bg-gradient-to-br from-card to-emerald-50/20 dark:to-emerald-950/20 relative overflow-hidden shadow-sm">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-bold text-muted-foreground">نسبة الإنجاز الكلية</span>
-                <div className="w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 grid place-items-center">
-                  <Flame size={16} />
+            {/* 4. Achievement Rate */}
+            <div className="kpi-glow-card">
+              <div className="kpi-card-header">
+                <span className="kpi-card-title">نسبة الإنجاز الكلية</span>
+                <div className="kpi-icon-pill" style={{ background: "rgba(16, 185, 129, 0.15)", color: "#10B981" }}>
+                  <Flame size={18} />
                 </div>
               </div>
-              <div className="flex items-baseline gap-2">
-                <h3 className="text-xl sm:text-2xl font-black text-emerald-600 dark:text-emerald-400 tracking-tight tabular">
-                  {kpis.achievementRate.toFixed(2)}%
-                </h3>
+              <div className="kpi-card-value text-emerald-600 dark:text-emerald-400">
+                {kpis.achievementRate.toFixed(2)}%
               </div>
-              {/* Mini Progress */}
-              <div className="w-full bg-muted rounded-full h-2 mt-3 overflow-hidden">
+              <div className="progress-rail">
                 <div
-                  className="bg-emerald-500 h-full rounded-full transition-all duration-500"
+                  className="progress-fill fill-emerald"
                   style={{ width: `${Math.min(100, kpis.achievementRate)}%` }}
                 />
               </div>
-            </Card>
-
-            {/* Remaining & Summary Stats */}
-            <Card className="p-4 sm:p-5 border-border bg-gradient-to-br from-card to-amber-50/20 dark:to-amber-950/20 relative overflow-hidden shadow-sm col-span-2 sm:col-span-1">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-bold text-muted-foreground">المتبقي للهدف</span>
-                <div className="w-8 h-8 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400 grid place-items-center">
-                  <Zap size={16} />
-                </div>
+              <div className="kpi-card-footer" style={{ marginTop: 6, paddingTop: 6 }}>
+                <span className="text-slate-500 dark:text-slate-400">
+                  المتبقي: {currency(kpis.remainingBalance)}
+                </span>
+                <span className="text-emerald-600 dark:text-emerald-400 font-bold">
+                  {kpis.achievementRate >= 100 ? "مكتمل 🎯" : "جاري التقدم ⚡"}
+                </span>
               </div>
-              <h3 className="text-xl sm:text-2xl font-black text-amber-600 dark:text-amber-400 tracking-tight tabular">
-                {currency(kpis.remainingBalance)}
-              </h3>
-              <div className="flex items-center gap-2 mt-2 text-[11px] text-muted-foreground font-semibold truncate">
-                <span>أفضل: <strong className="text-foreground">{kpis.bestGovernorate.name}</strong> ({kpis.bestGovernorate.rate.toFixed(0)}%)</span>
-              </div>
-            </Card>
+            </div>
           </div>
         )}
 
         {/* =========================================================================
-            SECTION 2: Data Health & Quality Alerts Strip
+            SECTION 2: Data Quality & Health Strip
             ========================================================================= */}
         {data?.dataHealth && (
-          <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 bg-card border border-border rounded-2xl shadow-xs text-xs">
-            <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-lg bg-teal-500/10 text-teal-600 dark:text-teal-400 grid place-items-center">
-                <ShieldCheck size={16} />
+          <div className="command-filter-box flex items-center justify-between flex-wrap gap-3">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-xl bg-teal-500/10 text-teal-600 grid place-items-center">
+                <ShieldCheck size={18} />
               </div>
-              <div>
-                <span className="font-bold text-foreground">تدقيق جودة البيانات:</span>{" "}
-                <span className="text-muted-foreground">
+              <div className="text-xs">
+                <span className="font-black text-slate-800 dark:text-slate-100">فحص وتدقيق جودة البيانات: </span>
+                <span className="text-slate-500 dark:text-slate-400">
                   تم فحص {data.dataHealth.totalRowsScanned} صف، واستبعاد {data.dataHealth.ignoredTemplateRows} صف فارغ، واعتماد {data.dataHealth.validSalesCount} حركة بيع صحيحة.
                 </span>
               </div>
             </div>
 
-            {/* Anomaly Filter Badges */}
-            <div className="flex items-center gap-2 flex-wrap">
+            {/* Quick Health Chips */}
+            <div className="flex items-center gap-2">
               {data.dataHealth.missingDelegateCount > 0 && (
                 <button
                   onClick={() => setFilters({ ...filters, healthFilter: "missing-delegate" })}
-                  className="px-2.5 py-1 rounded-lg bg-amber-500/10 text-amber-700 dark:text-amber-300 font-bold text-[11px] hover:bg-amber-500/20 transition-colors flex items-center gap-1"
+                  className="status-pill pill-amber cursor-pointer hover:opacity-80"
                 >
                   <AlertTriangle size={12} />
                   <span>{data.dataHealth.missingDelegateCount} بدون مندوب</span>
@@ -647,7 +577,7 @@ export function TestDashboard() {
               {data.dataHealth.missingCompanyCount > 0 && (
                 <button
                   onClick={() => setFilters({ ...filters, healthFilter: "missing-company" })}
-                  className="px-2.5 py-1 rounded-lg bg-rose-500/10 text-rose-700 dark:text-rose-300 font-bold text-[11px] hover:bg-rose-500/20 transition-colors flex items-center gap-1"
+                  className="status-pill pill-rose cursor-pointer hover:opacity-80"
                 >
                   <AlertCircle size={12} />
                   <span>{data.dataHealth.missingCompanyCount} بدون شركة</span>
@@ -656,7 +586,7 @@ export function TestDashboard() {
               {filters.healthFilter !== "all" && (
                 <button
                   onClick={() => setFilters({ ...filters, healthFilter: "all" })}
-                  className="px-2.5 py-1 rounded-lg bg-muted text-foreground font-bold text-[11px] hover:bg-secondary transition-colors"
+                  className="glass-btn text-xs py-1 px-2.5"
                 >
                   إلغاء فلتر الجودة ✕
                 </button>
@@ -666,134 +596,102 @@ export function TestDashboard() {
         )}
 
         {/* =========================================================================
-            SECTION 3: Governorates Performance Cards
+            SECTION 3: Governorates Radar Cards Grid
             ========================================================================= */}
         <div>
           <div className="flex items-center justify-between mb-3">
             <div>
-              <h2 className="text-base sm:text-lg font-black text-foreground flex items-center gap-2">
+              <h2 className="text-base font-black text-slate-900 dark:text-slate-100 flex items-center gap-2">
                 <Building2 size={18} className="text-teal-600 dark:text-teal-400" />
-                مراقبة أداء المحافظات المستهدفة
+                مراقبة أداء المحافظات الـ 4 المستهدفة
               </h2>
-              <p className="text-xs text-muted-foreground">
-                اضغط على أي محافظة لفتح الكشف التفصيلي والتحليلات المعمقة
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                اضغط على أي محافظة لفتح الكشف التحليلي المفصل والمندوبين
               </p>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="gov-radar-grid">
             {govPerformances.map((gov) => {
-              const isOverTarget = gov.achievementRate >= 100;
+              const isOver = gov.achievementRate >= 100;
               return (
-                <Card
+                <div
                   key={gov.governorate}
                   onClick={() => setSelectedGovModal(gov)}
-                  className={`p-4 sm:p-5 border cursor-pointer transition-all duration-200 hover:shadow-md relative overflow-hidden group ${
-                    isOverTarget
-                      ? "border-emerald-500/40 bg-gradient-to-b from-card to-emerald-50/15 dark:to-emerald-950/20"
-                      : gov.achievementRate >= 75
-                      ? "border-teal-500/30 bg-gradient-to-b from-card to-teal-50/10 dark:to-teal-950/15"
-                      : "border-border bg-card"
-                  }`}
+                  className={`gov-radar-card status-${gov.statusColor}`}
                 >
-                  {/* Status Strip & Top */}
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-xl bg-muted group-hover:bg-teal-500/20 group-hover:text-teal-600 grid place-items-center transition-colors">
+                      <div className="w-8 h-8 rounded-xl bg-slate-100 dark:bg-slate-800 text-teal-600 grid place-items-center font-black">
                         <MapPin size={16} />
                       </div>
-                      <h4 className="font-black text-base text-foreground">{gov.governorate}</h4>
+                      <h3 className="font-black text-base text-slate-900 dark:text-slate-100">{gov.governorate}</h3>
                     </div>
 
-                    <Badge
-                      className={`text-xs font-bold py-0.5 px-2 ${
-                        gov.statusColor === "emerald"
-                          ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30"
-                          : gov.statusColor === "teal"
-                          ? "bg-teal-500/15 text-teal-700 dark:text-teal-300 border-teal-500/30"
-                          : gov.statusColor === "amber"
-                          ? "bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30"
-                          : "bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/30"
-                      }`}
-                    >
+                    <span className={`status-pill pill-${gov.statusColor}`}>
                       {gov.status}
-                    </Badge>
+                    </span>
                   </div>
 
-                  {/* Numbers Grid */}
-                  <div className="space-y-2 mb-3">
+                  {/* Metrics */}
+                  <div className="space-y-2 mb-2 text-xs">
                     <div className="flex justify-between items-baseline">
-                      <span className="text-xs text-muted-foreground">المبيعات المحققة:</span>
-                      <strong className="text-sm sm:text-base font-black text-foreground tabular">
+                      <span className="text-slate-500 dark:text-slate-400">المبيعات المحققة:</span>
+                      <strong className="text-sm font-black text-slate-900 dark:text-slate-100 font-mono">
                         {currency(gov.totalSales)}
                       </strong>
                     </div>
 
-                    <div className="flex justify-between items-baseline text-xs">
-                      <span className="text-muted-foreground">التارغت المطلوب:</span>
-                      <span className="tabular font-semibold text-muted-foreground">
+                    <div className="flex justify-between items-baseline">
+                      <span className="text-slate-500 dark:text-slate-400">التارغت المطلوب:</span>
+                      <span className="font-semibold text-slate-500 dark:text-slate-400 font-mono">
                         {currency(gov.targetAmount)}
                       </span>
                     </div>
 
-                    <div className="flex justify-between items-baseline text-xs">
-                      <span className="text-muted-foreground">القطع المباعة:</span>
-                      <span className="tabular font-bold text-teal-600 dark:text-teal-400">
+                    <div className="flex justify-between items-baseline">
+                      <span className="text-slate-500 dark:text-slate-400">القطع المباعة:</span>
+                      <span className="font-bold text-teal-600 dark:text-teal-400 font-mono">
                         {gov.totalQuantity.toLocaleString()} قطعة
                       </span>
                     </div>
                   </div>
 
                   {/* Progress Bar */}
-                  <div className="space-y-1 pt-1 border-t border-border/60">
-                    <div className="flex justify-between text-xs font-bold">
-                      <span className="text-muted-foreground">نسبة الإنجاز:</span>
-                      <span className={`tabular ${isOverTarget ? "text-emerald-600 dark:text-emerald-400 font-black" : "text-foreground"}`}>
-                        {gov.achievementRate.toFixed(1)}%
-                      </span>
-                    </div>
-                    <div className="w-full bg-muted rounded-full h-2.5 overflow-hidden">
-                      <div
-                        className={`h-full rounded-full transition-all duration-500 ${
-                          gov.statusColor === "emerald"
-                            ? "bg-emerald-500"
-                            : gov.statusColor === "teal"
-                            ? "bg-teal-500"
-                            : gov.statusColor === "amber"
-                            ? "bg-amber-500"
-                            : "bg-rose-500"
-                        }`}
-                        style={{ width: `${Math.min(100, gov.achievementRate)}%` }}
-                      />
-                    </div>
+                  <div className="progress-rail">
+                    <div
+                      className={`progress-fill fill-${gov.statusColor}`}
+                      style={{ width: `${Math.min(100, gov.achievementRate)}%` }}
+                    />
                   </div>
 
-                  {/* Footer hint */}
-                  <div className="mt-3 pt-2 text-[11px] text-muted-foreground flex justify-between items-center">
-                    <span>{gov.delegatesCount} مندوبين نشطين</span>
-                    <span className="text-teal-600 dark:text-teal-400 group-hover:underline font-bold flex items-center gap-0.5">
-                      تفاصيل <ChevronLeft size={12} />
+                  <div className="flex items-center justify-between text-xs pt-1">
+                    <span className="font-bold text-slate-500 dark:text-slate-400">
+                      الإنجاز: <strong className={isOver ? "text-emerald-500" : "text-slate-900 dark:text-slate-100"}>{gov.achievementRate.toFixed(1)}%</strong>
+                    </span>
+                    <span className="text-teal-600 dark:text-teal-400 font-bold flex items-center gap-1 hover:underline">
+                      تفاصيل المحافظة <ChevronLeft size={12} />
                     </span>
                   </div>
-                </Card>
+                </div>
               );
             })}
           </div>
         </div>
 
         {/* =========================================================================
-            SECTION 4: Visual Analytics Charts
+            SECTION 4: Visual Analytics Charts (Recharts)
             ========================================================================= */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-          {/* Chart 1: Sales vs Target by Governorate */}
-          <Card className="p-4 sm:p-5 border-border bg-card shadow-xs lg:col-span-2">
+          {/* Dual Bar Chart */}
+          <div className="command-filter-box lg:col-span-2">
             <div className="flex items-center justify-between mb-4">
               <div>
-                <h3 className="font-bold text-base text-foreground flex items-center gap-2">
-                  <BarChart3 size={17} className="text-teal-600" />
+                <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                  <BarChart3 size={16} className="text-teal-600" />
                   مقارنة المبيعات المحققة مقابل التارغت لكل محافظة
                 </h3>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs text-slate-500 dark:text-slate-400">
                   مقارنة بالأعمدة المزدوجة بين الفعلي والمستهدف
                 </p>
               </div>
@@ -802,7 +700,7 @@ export function TestDashboard() {
             <div className="h-[280px] w-full" dir="ltr">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={govBarChartData} margin={{ top: 10, right: 10, left: 10, bottom: 20 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" opacity={0.5} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" opacity={0.3} />
                   <XAxis dataKey="name" tick={{ fill: "#64748b", fontSize: 12, fontWeight: "bold" }} />
                   <YAxis
                     tickFormatter={(val) => `${(val / 1000000).toFixed(0)}M`}
@@ -810,8 +708,7 @@ export function TestDashboard() {
                   />
                   <Tooltip
                     formatter={(val: number) => currency(val)}
-                    labelStyle={{ fontWeight: "bold", textAlign: "right" }}
-                    contentStyle={{ borderRadius: 12, direction: "rtl", textAlign: "right" }}
+                    contentStyle={{ borderRadius: 12, direction: "rtl", textAlign: "right", background: "#0f172a", color: "#fff", border: "none" }}
                   />
                   <Legend wrapperStyle={{ paddingTop: 10 }} />
                   <Bar dataKey="المبيعات المحققة" fill="#0F766E" radius={[6, 6, 0, 0]} />
@@ -819,18 +716,18 @@ export function TestDashboard() {
                 </BarChart>
               </ResponsiveContainer>
             </div>
-          </Card>
+          </div>
 
-          {/* Chart 2: Governorates Market Share Donut */}
-          <Card className="p-4 sm:p-5 border-border bg-card shadow-xs">
+          {/* Donut Chart */}
+          <div className="command-filter-box">
             <div className="flex items-center justify-between mb-4">
               <div>
-                <h3 className="font-bold text-base text-foreground flex items-center gap-2">
-                  <PieChartIcon size={17} className="text-teal-600" />
+                <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                  <PieChartIcon size={16} className="text-teal-600" />
                   توزيع الحصة البيعية للمحافظات
                 </h3>
-                <p className="text-xs text-muted-foreground">
-                  نسبة مساهمة كل محافظة في إجمالي المبيعات
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  نسبة مساهمة كل محافظة من المبيعات
                 </p>
               </div>
             </div>
@@ -853,501 +750,396 @@ export function TestDashboard() {
                   </Pie>
                   <Tooltip
                     formatter={(val: number) => currency(val)}
-                    contentStyle={{ borderRadius: 12, direction: "rtl", textAlign: "right" }}
+                    contentStyle={{ borderRadius: 12, direction: "rtl", textAlign: "right", background: "#0f172a", color: "#fff", border: "none" }}
                   />
                   <Legend wrapperStyle={{ paddingTop: 10, fontSize: 11 }} />
                 </PieChart>
               </ResponsiveContainer>
             </div>
-          </Card>
+          </div>
         </div>
 
         {/* =========================================================================
-            SECTION 5: Cascading Multi-Dimension Filter Bar
+            SECTION 5: High-Tech Cascading Command Filter Bar
             ========================================================================= */}
-        <Card className="p-4 sm:p-5 border-border bg-card shadow-xs space-y-3.5">
-          <div className="flex items-center justify-between flex-wrap gap-2 pb-2 border-b border-border/70">
+        <div className="command-filter-box">
+          <div className="flex items-center justify-between flex-wrap gap-2 pb-3 mb-3 border-b border-slate-200 dark:border-slate-800">
             <div className="flex items-center gap-2">
               <Filter size={16} className="text-teal-600" />
-              <h3 className="font-bold text-sm text-foreground">تصفية وبحث متعدد الأبعاد</h3>
-              <Badge variant="outline" className="text-xs font-bold tabular">
+              <h3 className="font-black text-sm text-slate-900 dark:text-slate-100">
+                لوحة الفلاتر الذكية والبحث المتقدم
+              </h3>
+              <span className="status-pill pill-teal font-mono text-xs">
                 {filteredSales.length} حركة مطابقة
-              </Badge>
+              </span>
             </div>
 
-            <Button
-              variant="ghost"
-              size="sm"
+            <button
               onClick={resetAllFilters}
-              className="text-xs h-8 text-muted-foreground hover:text-foreground"
+              className="glass-btn text-xs"
             >
               إعادة تعيين الفلاتر ✕
-            </Button>
+            </button>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-            {/* 1. Governorate Filter */}
-            <div className="space-y-1">
-              <label className="text-[11px] font-bold text-muted-foreground">المحافظة:</label>
-              <Select
+          <div className="filter-grid-layout">
+            {/* 1. Governorate */}
+            <div className="filter-input-group">
+              <label>المحافظة:</label>
+              <select
                 value={filters.governorate}
-                onValueChange={(val) => {
-                  setFilters({ ...filters, governorate: val, delegate: "all" });
+                onChange={(e) => {
+                  setFilters({ ...filters, governorate: e.target.value, delegate: "all" });
                   setCurrentPage(1);
                 }}
+                className="filter-custom-select"
               >
-                <SelectTrigger className="h-9 text-xs bg-background">
-                  <SelectValue placeholder="الكل" />
-                </SelectTrigger>
-                <SelectContent align="end">
-                  <SelectItem value="all">الكل (جميع المحافظات)</SelectItem>
-                  {data?.availableGovernorates.map((g) => (
-                    <SelectItem key={g} value={g}>
-                      {g}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                <option value="all">الكل (جميع المحافظات)</option>
+                {data?.availableGovernorates.map((g) => (
+                  <option key={g} value={g}>{g}</option>
+                ))}
+              </select>
             </div>
 
-            {/* 2. Delegate Filter (Cascading) */}
-            <div className="space-y-1">
-              <label className="text-[11px] font-bold text-muted-foreground">المندوب:</label>
-              <Select
+            {/* 2. Delegate (Cascading) */}
+            <div className="filter-input-group">
+              <label>المندوب:</label>
+              <select
                 value={filters.delegate}
-                onValueChange={(val) => {
-                  setFilters({ ...filters, delegate: val });
+                onChange={(e) => {
+                  setFilters({ ...filters, delegate: e.target.value });
                   setCurrentPage(1);
                 }}
+                className="filter-custom-select"
               >
-                <SelectTrigger className="h-9 text-xs bg-background">
-                  <SelectValue placeholder="الكل" />
-                </SelectTrigger>
-                <SelectContent align="end">
-                  <SelectItem value="all">الكل (جميع المندوبين)</SelectItem>
-                  {availableDelegatesForGov.map((d) => (
-                    <SelectItem key={d} value={d}>
-                      {d}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                <option value="all">الكل (جميع المندوبين)</option>
+                {availableDelegatesForGov.map((d) => (
+                  <option key={d} value={d}>{d}</option>
+                ))}
+              </select>
             </div>
 
-            {/* 3. Company Filter */}
-            <div className="space-y-1">
-              <label className="text-[11px] font-bold text-muted-foreground">الشركة:</label>
-              <Select
+            {/* 3. Company */}
+            <div className="filter-input-group">
+              <label>الشركة:</label>
+              <select
                 value={filters.company}
-                onValueChange={(val) => {
-                  setFilters({ ...filters, company: val });
+                onChange={(e) => {
+                  setFilters({ ...filters, company: e.target.value });
                   setCurrentPage(1);
                 }}
+                className="filter-custom-select"
               >
-                <SelectTrigger className="h-9 text-xs bg-background">
-                  <SelectValue placeholder="الكل" />
-                </SelectTrigger>
-                <SelectContent align="end">
-                  <SelectItem value="all">الكل (جميع الشركات)</SelectItem>
-                  {data?.availableCompanies.map((c) => (
-                    <SelectItem key={c} value={c}>
-                      {c}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                <option value="all">الكل (جميع الشركات)</option>
+                {data?.availableCompanies.map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
             </div>
 
-            {/* 4. Product Filter */}
-            <div className="space-y-1">
-              <label className="text-[11px] font-bold text-muted-foreground">المادة الدوائية:</label>
-              <Select
+            {/* 4. Product */}
+            <div className="filter-input-group">
+              <label>المادة الدوائية:</label>
+              <select
                 value={filters.product}
-                onValueChange={(val) => {
-                  setFilters({ ...filters, product: val });
+                onChange={(e) => {
+                  setFilters({ ...filters, product: e.target.value });
                   setCurrentPage(1);
                 }}
+                className="filter-custom-select"
               >
-                <SelectTrigger className="h-9 text-xs bg-background">
-                  <SelectValue placeholder="الكل" />
-                </SelectTrigger>
-                <SelectContent align="end">
-                  <SelectItem value="all">الكل (جميع المواد)</SelectItem>
-                  {data?.availableProducts.map((p) => (
-                    <SelectItem key={p} value={p}>
-                      {p}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                <option value="all">الكل (جميع المواد)</option>
+                {data?.availableProducts.map((p) => (
+                  <option key={p} value={p}>{p}</option>
+                ))}
+              </select>
             </div>
 
             {/* 5. Quick Search */}
-            <div className="space-y-1">
-              <label className="text-[11px] font-bold text-muted-foreground">بحث سريع:</label>
+            <div className="filter-input-group">
+              <label>بحث سريع:</label>
               <div className="relative">
-                <Search size={14} className="absolute right-3 top-2.5 text-muted-foreground" />
-                <Input
+                <input
+                  type="text"
                   value={filters.searchQuery}
                   onChange={(e) => {
                     setFilters({ ...filters, searchQuery: e.target.value });
                     setCurrentPage(1);
                   }}
                   placeholder="ابحث بأي نص..."
-                  className="h-9 pr-8 text-xs bg-background"
+                  className="filter-custom-input"
                 />
                 {filters.searchQuery && (
                   <button
                     onClick={() => setFilters({ ...filters, searchQuery: "" })}
-                    className="absolute left-2.5 top-2.5 text-muted-foreground hover:text-foreground"
+                    className="absolute left-2.5 top-2.5 text-slate-400 hover:text-slate-600"
                   >
-                    <X size={13} />
+                    <X size={14} />
                   </button>
                 )}
               </div>
             </div>
           </div>
-        </Card>
+        </div>
 
         {/* =========================================================================
-            SECTION 6: Tabbed Deep Analytics Section (5 Views)
+            SECTION 6: Tabbed Deep Analytical Views (5 Tabs)
             ========================================================================= */}
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-          <div className="flex items-center justify-between flex-wrap gap-3 pb-1 border-b border-border">
-            <TabsList className="bg-muted p-1 rounded-xl">
-              <TabsTrigger value="table" className="text-xs font-bold flex items-center gap-1.5 py-1.5 px-3 rounded-lg">
-                <TableProperties size={14} />
-                <span>جدول المبيعات الموحد ({filteredSales.length})</span>
-              </TabsTrigger>
-              <TabsTrigger value="delegates" className="text-xs font-bold flex items-center gap-1.5 py-1.5 px-3 rounded-lg">
-                <Users size={14} />
-                <span>ترتيب المندوبين ({delegatesRanking.length})</span>
-              </TabsTrigger>
-              <TabsTrigger value="products" className="text-xs font-bold flex items-center gap-1.5 py-1.5 px-3 rounded-lg">
-                <Package size={14} />
-                <span>تحليل المواد ({productsPerformance.length})</span>
-              </TabsTrigger>
-              <TabsTrigger value="companies" className="text-xs font-bold flex items-center gap-1.5 py-1.5 px-3 rounded-lg">
-                <Building2 size={14} />
-                <span>تحليل الشركات ({companyAnalytics.length})</span>
-              </TabsTrigger>
-              <TabsTrigger value="timeline" className="text-xs font-bold flex items-center gap-1.5 py-1.5 px-3 rounded-lg">
-                <LineChart size={14} />
-                <span>المسار الزمني للمبيعات</span>
-              </TabsTrigger>
-            </TabsList>
+        <div className="space-y-4">
+          <div className="command-tabs-nav">
+            <button
+              onClick={() => setActiveTab("table")}
+              className={`command-tab-btn ${activeTab === "table" ? "active" : ""}`}
+            >
+              <TableProperties size={15} />
+              <span>جدول المبيعات الموحد ({filteredSales.length})</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab("delegates")}
+              className={`command-tab-btn ${activeTab === "delegates" ? "active" : ""}`}
+            >
+              <Users size={15} />
+              <span>ترتيب المندوبين ({delegatesRanking.length})</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab("products")}
+              className={`command-tab-btn ${activeTab === "products" ? "active" : ""}`}
+            >
+              <Package size={15} />
+              <span>تحليل المواد ({productsPerformance.length})</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab("companies")}
+              className={`command-tab-btn ${activeTab === "companies" ? "active" : ""}`}
+            >
+              <Building2 size={15} />
+              <span>تحليل الشركات ({companyAnalytics.length})</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab("timeline")}
+              className={`command-tab-btn ${activeTab === "timeline" ? "active" : ""}`}
+            >
+              <LineChart size={15} />
+              <span>المسار الزمني للمبيعات</span>
+            </button>
           </div>
 
-          {/* =====================================================================
-              TAB 1: Unified Sales Data Table
-              ===================================================================== */}
-          <TabsContent value="table" className="space-y-4">
-            <Card className="border-border bg-card overflow-hidden shadow-xs">
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs text-right border-collapse">
+          {/* TAB 1: Unified Sales Matrix Table */}
+          {activeTab === "table" && (
+            <div className="matrix-table-container">
+              <div style={{ overflowX: "auto" }}>
+                <table className="matrix-table">
                   <thead>
-                    <tr className="bg-muted/70 border-b border-border text-muted-foreground font-bold">
-                      <th onClick={() => handleSort("delegateName")} className="p-3 cursor-pointer hover:text-foreground">
-                        <div className="flex items-center gap-1">
-                          <span>المندوب</span>
-                          <ArrowUpDown size={12} />
-                        </div>
-                      </th>
-                      <th onClick={() => handleSort("governorate")} className="p-3 cursor-pointer hover:text-foreground">
-                        <div className="flex items-center gap-1">
-                          <span>المحافظة</span>
-                          <ArrowUpDown size={12} />
-                        </div>
-                      </th>
-                      <th onClick={() => handleSort("company")} className="p-3 cursor-pointer hover:text-foreground">
-                        <div className="flex items-center gap-1">
-                          <span>الشركة</span>
-                          <ArrowUpDown size={12} />
-                        </div>
-                      </th>
-                      <th onClick={() => handleSort("item")} className="p-3 cursor-pointer hover:text-foreground">
-                        <div className="flex items-center gap-1">
-                          <span>المادة</span>
-                          <ArrowUpDown size={12} />
-                        </div>
-                      </th>
-                      <th onClick={() => handleSort("quantity")} className="p-3 text-center cursor-pointer hover:text-foreground">
-                        <div className="flex items-center justify-center gap-1">
-                          <span>العدد</span>
-                          <ArrowUpDown size={12} />
-                        </div>
-                      </th>
-                      <th onClick={() => handleSort("unitPrice")} className="p-3 text-left cursor-pointer hover:text-foreground">
-                        <div className="flex items-center justify-end gap-1">
-                          <span>سعر المادة</span>
-                          <ArrowUpDown size={12} />
-                        </div>
-                      </th>
-                      <th onClick={() => handleSort("totalAmount")} className="p-3 text-left cursor-pointer hover:text-foreground">
-                        <div className="flex items-center justify-end gap-1">
-                          <span>إجمالي المبلغ</span>
-                          <ArrowUpDown size={12} />
-                        </div>
-                      </th>
-                      <th onClick={() => handleSort("date")} className="p-3 text-center cursor-pointer hover:text-foreground">
-                        <div className="flex items-center justify-center gap-1">
-                          <span>التاريخ</span>
-                          <ArrowUpDown size={12} />
-                        </div>
-                      </th>
-                      <th onClick={() => handleSort("governorateTarget")} className="p-3 text-left cursor-pointer hover:text-foreground">
-                        <div className="flex items-center justify-end gap-1">
-                          <span>تارجت المحافظة</span>
-                          <ArrowUpDown size={12} />
-                        </div>
-                      </th>
-                      <th onClick={() => handleSort("achievementRate")} className="p-3 text-center cursor-pointer hover:text-foreground">
-                        <div className="flex items-center justify-center gap-1">
-                          <span>نسبة الإنجاز</span>
-                          <ArrowUpDown size={12} />
-                        </div>
-                      </th>
-                      <th className="p-3 text-center">المصدر</th>
+                    <tr>
+                      <th onClick={() => handleSort("delegateName")}>المندوب ⇕</th>
+                      <th onClick={() => handleSort("governorate")}>المحافظة ⇕</th>
+                      <th onClick={() => handleSort("company")}>الشركة ⇕</th>
+                      <th onClick={() => handleSort("item")}>المادة ⇕</th>
+                      <th onClick={() => handleSort("quantity")} style={{ textAlign: "center" }}>العدد ⇕</th>
+                      <th onClick={() => handleSort("unitPrice")} style={{ textAlign: "left" }}>سعر المادة ⇕</th>
+                      <th onClick={() => handleSort("totalAmount")} style={{ textAlign: "left" }}>إجمالي المبلغ ⇕</th>
+                      <th onClick={() => handleSort("date")} style={{ textAlign: "center" }}>التاريخ ⇕</th>
+                      <th onClick={() => handleSort("governorateTarget")} style={{ textAlign: "left" }}>تارجت المحافظة ⇕</th>
+                      <th onClick={() => handleSort("achievementRate")} style={{ textAlign: "center" }}>نسبة الإنجاز ⇕</th>
+                      <th style={{ textAlign: "center" }}>المصدر</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-border">
+                  <tbody>
                     {sortedAndPaginatedSales.rows.length === 0 ? (
                       <tr>
-                        <td colSpan={11} className="p-8 text-center text-muted-foreground">
+                        <td colSpan={11} style={{ textAlign: "center", padding: "40px", color: "#64748b" }}>
                           لا توجد سجلات مبيعات مطابقة للفلاتر الحالية
                         </td>
                       </tr>
                     ) : (
-                      sortedAndPaginatedSales.rows.map((row) => {
-                        const hasAnomaly = row.anomalies.length > 0;
-                        return (
-                          <tr
-                            key={row.id}
-                            className={`hover:bg-muted/40 transition-colors ${
-                              hasAnomaly ? "bg-amber-500/5" : ""
-                            }`}
-                          >
-                            <td className="p-3 font-bold text-foreground">
-                              {row.delegateName}
-                              {hasAnomaly && (
-                                <span className="mr-1.5 text-amber-500" title={row.anomalies.join("، ")}>
-                                  ⚠️
-                                </span>
-                              )}
-                            </td>
-                            <td className="p-3">
-                              <Badge variant="outline" className="text-[11px] font-semibold">
-                                {row.governorate}
-                              </Badge>
-                            </td>
-                            <td className="p-3 font-semibold text-muted-foreground">{row.company}</td>
-                            <td className="p-3 font-bold text-teal-700 dark:text-teal-300">{row.item}</td>
-                            <td className="p-3 text-center font-bold tabular">{row.quantity.toLocaleString()}</td>
-                            <td className="p-3 text-left font-semibold text-muted-foreground tabular">
-                              {currency(row.unitPrice)}
-                            </td>
-                            <td className="p-3 text-left font-black text-foreground tabular">
-                              {currency(row.totalAmount)}
-                            </td>
-                            <td className="p-3 text-center text-muted-foreground tabular">{row.date}</td>
-                            <td className="p-3 text-left text-muted-foreground tabular">
-                              {currency(row.governorateTarget)}
-                            </td>
-                            <td className="p-3 text-center font-black text-emerald-600 dark:text-emerald-400 tabular">
-                              {(row.achievementRate * 100).toFixed(1)}%
-                            </td>
-                            <td className="p-3 text-center text-[10px] text-muted-foreground">{row.sheetSource}</td>
-                          </tr>
-                        );
-                      })
+                      sortedAndPaginatedSales.rows.map((row) => (
+                        <tr key={row.id}>
+                          <td style={{ fontWeight: 800 }}>
+                            {row.delegateName}
+                            {row.anomalies.length > 0 && (
+                              <span style={{ marginRight: 6 }} title={row.anomalies.join("، ")}>⚠️</span>
+                            )}
+                          </td>
+                          <td>
+                            <span className="status-pill pill-teal">{row.governorate}</span>
+                          </td>
+                          <td style={{ fontWeight: 700, color: "#64748b" }}>{row.company}</td>
+                          <td style={{ fontWeight: 800, color: "#0f766e" }}>{row.item}</td>
+                          <td style={{ textAlign: "center", fontWeight: 800 }} className="font-mono">{row.quantity.toLocaleString()}</td>
+                          <td style={{ textAlign: "left", color: "#64748b" }} className="font-mono">{currency(row.unitPrice)}</td>
+                          <td style={{ textAlign: "left", fontWeight: 900 }} className="font-mono">{currency(row.totalAmount)}</td>
+                          <td style={{ textAlign: "center", color: "#64748b" }} className="font-mono">{row.date}</td>
+                          <td style={{ textAlign: "left", color: "#64748b" }} className="font-mono">{currency(row.governorateTarget)}</td>
+                          <td style={{ textAlign: "center", fontWeight: 900, color: "#10b981" }} className="font-mono">
+                            {(row.achievementRate * 100).toFixed(1)}%
+                          </td>
+                          <td style={{ textAlign: "center", fontSize: "0.7rem", color: "#94a3b8" }}>{row.sheetSource}</td>
+                        </tr>
+                      ))
                     )}
                   </tbody>
                 </table>
               </div>
 
-              {/* Table Footer with Pagination Controls */}
-              <div className="flex items-center justify-between p-3 border-t border-border bg-muted/30 flex-wrap gap-2 text-xs">
-                <div className="text-muted-foreground">
+              {/* Table Pagination */}
+              <div style={{ padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: "1px solid #e2e8f0", flexWrap: "wrap", gap: 8, fontSize: "0.75rem" }}>
+                <span style={{ color: "#64748b" }}>
                   عرض {sortedAndPaginatedSales.rows.length} من أصل {sortedAndPaginatedSales.totalCount} حركة بيع
-                </div>
+                </span>
 
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <button
                     disabled={currentPage <= 1}
                     onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                    className="h-8 px-2.5 text-xs"
+                    className="glass-btn text-xs py-1 px-3"
                   >
-                    <ChevronRight size={14} className="ml-1" />
                     السابق
-                  </Button>
+                  </button>
 
-                  <span className="font-bold text-foreground tabular">
+                  <span style={{ fontWeight: 800 }}>
                     صفحة {sortedAndPaginatedSales.safePage} من {sortedAndPaginatedSales.totalPages}
                   </span>
 
-                  <Button
-                    variant="outline"
-                    size="sm"
+                  <button
                     disabled={currentPage >= sortedAndPaginatedSales.totalPages}
                     onClick={() => setCurrentPage((p) => p + 1)}
-                    className="h-8 px-2.5 text-xs"
+                    className="glass-btn text-xs py-1 px-3"
                   >
                     التالي
-                    <ChevronLeft size={14} className="mr-1" />
-                  </Button>
+                  </button>
                 </div>
               </div>
-            </Card>
-          </TabsContent>
+            </div>
+          )}
 
-          {/* =====================================================================
-              TAB 2: Delegates Leaderboard
-              ===================================================================== */}
-          <TabsContent value="delegates" className="space-y-4">
-            <Card className="border-border bg-card overflow-hidden shadow-xs">
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs text-right border-collapse">
+          {/* TAB 2: Delegates Leaderboard */}
+          {activeTab === "delegates" && (
+            <div className="matrix-table-container">
+              <div style={{ overflowX: "auto" }}>
+                <table className="matrix-table">
                   <thead>
-                    <tr className="bg-muted/70 border-b border-border text-muted-foreground font-bold">
-                      <th className="p-3 text-center w-12">#</th>
-                      <th className="p-3">المندوب</th>
-                      <th className="p-3">المحافظة</th>
-                      <th className="p-3">الكود</th>
-                      <th className="p-3 text-left">إجمالي المبيعات</th>
-                      <th className="p-3 text-center">القطع المباعة</th>
-                      <th className="p-3 text-center">عدد العمليات</th>
-                      <th className="p-3 text-center">مساهمته بالمحافظة</th>
-                      <th className="p-3">أفضل مادة باعها</th>
+                    <tr>
+                      <th style={{ textAlign: "center", width: 50 }}>#</th>
+                      <th>المندوب</th>
+                      <th>المحافظة</th>
+                      <th>الكود</th>
+                      <th style={{ textAlign: "left" }}>إجمالي المبيعات</th>
+                      <th style={{ textAlign: "center" }}>القطع المباعة</th>
+                      <th style={{ textAlign: "center" }}>عدد العمليات</th>
+                      <th style={{ textAlign: "center" }}>مساهمته بالمحافظة</th>
+                      <th>أفضل مادة باعها</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-border">
+                  <tbody>
                     {delegatesRanking.map((del) => (
-                      <tr key={del.delegateName} className="hover:bg-muted/40 transition-colors">
-                        <td className="p-3 text-center">
+                      <tr key={del.delegateName}>
+                        <td style={{ textAlign: "center" }}>
                           <span
-                            className={`w-6 h-6 rounded-full inline-grid place-items-center font-black text-xs ${
-                              del.rank === 1
-                                ? "bg-amber-400 text-slate-900"
-                                : del.rank === 2
-                                ? "bg-slate-300 text-slate-900"
-                                : del.rank === 3
-                                ? "bg-amber-600 text-white"
-                                : "bg-muted text-muted-foreground"
-                            }`}
+                            style={{
+                              display: "inline-grid",
+                              width: 24,
+                              height: 24,
+                              borderRadius: "50%",
+                              placeItems: "center",
+                              fontWeight: 900,
+                              fontSize: "0.75rem",
+                              background: del.rank === 1 ? "#fbbf24" : del.rank === 2 ? "#cbd5e1" : del.rank === 3 ? "#d97706" : "rgba(255,255,255,0.08)",
+                              color: del.rank <= 3 ? "#0f172a" : "inherit",
+                            }}
                           >
                             {del.rank}
                           </span>
                         </td>
-                        <td className="p-3 font-bold text-foreground">{del.delegateName}</td>
-                        <td className="p-3">
-                          <Badge variant="outline" className="text-[11px]">
-                            {del.governorate}
-                          </Badge>
-                        </td>
-                        <td className="p-3 text-muted-foreground font-mono text-[11px]">{del.code || "—"}</td>
-                        <td className="p-3 text-left font-black text-foreground tabular">{currency(del.totalSales)}</td>
-                        <td className="p-3 text-center font-bold text-teal-600 dark:text-teal-400 tabular">
-                          {del.totalQuantity.toLocaleString()}
-                        </td>
-                        <td className="p-3 text-center tabular">{del.transactionCount}</td>
-                        <td className="p-3 text-center font-bold text-emerald-600 dark:text-emerald-400 tabular">
-                          {del.shareOfGovernorateRate.toFixed(1)}%
-                        </td>
-                        <td className="p-3 font-semibold text-teal-700 dark:text-teal-300">{del.topProduct}</td>
+                        <td style={{ fontWeight: 900 }}>{del.delegateName}</td>
+                        <td><span className="status-pill pill-teal">{del.governorate}</span></td>
+                        <td style={{ color: "#64748b", fontFamily: "monospace" }}>{del.code || "—"}</td>
+                        <td style={{ textAlign: "left", fontWeight: 900 }} className="font-mono">{currency(del.totalSales)}</td>
+                        <td style={{ textAlign: "center", fontWeight: 800, color: "#0f766e" }} className="font-mono">{del.totalQuantity.toLocaleString()}</td>
+                        <td style={{ textAlign: "center" }} className="font-mono">{del.transactionCount}</td>
+                        <td style={{ textAlign: "center", fontWeight: 900, color: "#10b981" }} className="font-mono">{del.shareOfGovernorateRate.toFixed(1)}%</td>
+                        <td style={{ fontWeight: 700, color: "#0f766e" }}>{del.topProduct}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
-            </Card>
-          </TabsContent>
+            </div>
+          )}
 
-          {/* =====================================================================
-              TAB 3: Products Performance Analytics
-              ===================================================================== */}
-          <TabsContent value="products" className="space-y-4">
-            <Card className="border-border bg-card overflow-hidden shadow-xs">
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs text-right border-collapse">
+          {/* TAB 3: Product Performance */}
+          {activeTab === "products" && (
+            <div className="matrix-table-container">
+              <div style={{ overflowX: "auto" }}>
+                <table className="matrix-table">
                   <thead>
-                    <tr className="bg-muted/70 border-b border-border text-muted-foreground font-bold">
-                      <th className="p-3 text-center w-12">#</th>
-                      <th className="p-3">المادة الدوائية</th>
-                      <th className="p-3">الشركة</th>
-                      <th className="p-3 text-left">السعر المفرد</th>
-                      <th className="p-3 text-center">إجمالي الكمية المباعة</th>
-                      <th className="p-3 text-left">إجمالي الإيراد المالي</th>
-                      <th className="p-3">أفضل محافظة للمادة</th>
-                      <th className="p-3">أفضل مندوب</th>
+                    <tr>
+                      <th style={{ textAlign: "center", width: 50 }}>#</th>
+                      <th>المادة الدوائية</th>
+                      <th>الشركة</th>
+                      <th style={{ textAlign: "left" }}>السعر المفرد</th>
+                      <th style={{ textAlign: "center" }}>إجمالي الكمية المباعة</th>
+                      <th style={{ textAlign: "left" }}>إجمالي الإيراد المالي</th>
+                      <th>أفضل محافظة للمادة</th>
+                      <th>أفضل مندوب</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-border">
+                  <tbody>
                     {productsPerformance.map((p) => (
-                      <tr key={p.item} className="hover:bg-muted/40 transition-colors">
-                        <td className="p-3 text-center font-bold text-muted-foreground">{p.rank}</td>
-                        <td className="p-3 font-black text-foreground text-sm">{p.item}</td>
-                        <td className="p-3">
-                          <Badge variant="outline" className="text-[11px] font-bold">
-                            {p.company}
-                          </Badge>
-                        </td>
-                        <td className="p-3 text-left text-muted-foreground tabular font-semibold">
-                          {currency(p.unitPrice)}
-                        </td>
-                        <td className="p-3 text-center font-black text-teal-600 dark:text-teal-400 tabular">
-                          {p.totalQuantity.toLocaleString()} قطعة
-                        </td>
-                        <td className="p-3 text-left font-black text-foreground tabular text-sm">
-                          {currency(p.totalRevenue)}
-                        </td>
-                        <td className="p-3 font-bold text-foreground">{p.topGovernorate}</td>
-                        <td className="p-3 text-muted-foreground font-semibold">{p.topDelegate}</td>
+                      <tr key={p.item}>
+                        <td style={{ textAlign: "center", fontWeight: 800, color: "#64748b" }}>{p.rank}</td>
+                        <td style={{ fontWeight: 900, fontSize: "0.85rem" }}>{p.item}</td>
+                        <td><span className="status-pill pill-teal">{p.company}</span></td>
+                        <td style={{ textAlign: "left", color: "#64748b" }} className="font-mono">{currency(p.unitPrice)}</td>
+                        <td style={{ textAlign: "center", fontWeight: 900, color: "#0f766e" }} className="font-mono">{p.totalQuantity.toLocaleString()} قطعة</td>
+                        <td style={{ textAlign: "left", fontWeight: 900 }} className="font-mono">{currency(p.totalRevenue)}</td>
+                        <td style={{ fontWeight: 800 }}>{p.topGovernorate}</td>
+                        <td style={{ color: "#64748b" }}>{p.topDelegate}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
-            </Card>
-          </TabsContent>
+            </div>
+          )}
 
-          {/* =====================================================================
-              TAB 4: Companies Market Share
-              ===================================================================== */}
-          <TabsContent value="companies" className="space-y-4">
+          {/* TAB 4: Companies Analysis */}
+          {activeTab === "companies" && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {companyAnalytics.map((c) => (
-                <Card key={c.company} className="p-5 border-border bg-card space-y-4 shadow-xs">
-                  <div className="flex items-center justify-between pb-3 border-b border-border">
+                <div key={c.company} className="command-filter-box space-y-4">
+                  <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
                     <div className="flex items-center gap-2">
-                      <div className="w-9 h-9 rounded-xl bg-teal-500/10 text-teal-600 grid place-items-center">
-                        <Building2 size={18} />
+                      <div className="w-10 h-10 rounded-xl bg-teal-500/15 text-teal-600 grid place-items-center">
+                        <Building2 size={20} />
                       </div>
                       <div>
-                        <h4 className="font-black text-base text-foreground">شركة {c.company}</h4>
-                        <span className="text-xs text-muted-foreground">{c.skuCount} مادة دوائية مسجلة</span>
+                        <h4 className="font-black text-base text-slate-900 dark:text-slate-100">شركة {c.company}</h4>
+                        <span className="text-xs text-slate-500 dark:text-slate-400">{c.skuCount} مادة دوائية مسجلة</span>
                       </div>
                     </div>
 
                     <div className="text-left">
-                      <span className="text-xs text-muted-foreground">الحصة السوقية</span>
-                      <h3 className="font-black text-lg text-teal-600 dark:text-teal-400 tabular">
+                      <span className="text-xs text-slate-500 dark:text-slate-400">الحصة السوقية</span>
+                      <h3 className="font-black text-xl text-teal-600 dark:text-teal-400 font-mono">
                         {c.marketShareRate.toFixed(1)}%
                       </h3>
                     </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-3 text-xs">
-                    <div className="p-3 rounded-xl bg-muted/40">
-                      <span className="text-muted-foreground">إجمالي مبيعات الشركة:</span>
-                      <strong className="block text-sm font-black text-foreground mt-1 tabular">
+                    <div className="p-3 rounded-xl bg-slate-100 dark:bg-slate-800/60">
+                      <span className="text-slate-500 dark:text-slate-400">إجمالي مبيعات الشركة:</span>
+                      <strong className="block text-sm font-black text-slate-900 dark:text-slate-100 mt-1 font-mono">
                         {currency(c.totalSales)}
                       </strong>
                     </div>
-                    <div className="p-3 rounded-xl bg-muted/40">
-                      <span className="text-muted-foreground">إجمالي القطع المسحوبة:</span>
-                      <strong className="block text-sm font-black text-teal-600 dark:text-teal-400 mt-1 tabular">
+                    <div className="p-3 rounded-xl bg-slate-100 dark:bg-slate-800/60">
+                      <span className="text-slate-500 dark:text-slate-400">إجمالي القطع المسحوبة:</span>
+                      <strong className="block text-sm font-black text-teal-600 dark:text-teal-400 mt-1 font-mono">
                         {c.totalQuantity.toLocaleString()} قطعة
                       </strong>
                     </div>
@@ -1355,40 +1147,38 @@ export function TestDashboard() {
 
                   {/* Governorate distribution */}
                   <div className="space-y-2">
-                    <span className="text-xs font-bold text-muted-foreground">توزيع المبيعات على المحافظات:</span>
-                    <div className="space-y-1.5">
+                    <span className="text-xs font-bold text-slate-500 dark:text-slate-400">توزيع المبيعات على المحافظات:</span>
+                    <div className="space-y-2">
                       {c.governoratesDistribution.map((gd) => {
                         const pct = c.totalSales > 0 ? (gd.sales / c.totalSales) * 100 : 0;
                         return (
                           <div key={gd.governorate} className="text-xs">
-                            <div className="flex justify-between font-semibold mb-0.5">
+                            <div className="flex justify-between font-bold mb-1">
                               <span>{gd.governorate}</span>
-                              <span className="tabular">{currency(gd.sales)} ({pct.toFixed(0)}%)</span>
+                              <span className="font-mono">{currency(gd.sales)} ({pct.toFixed(0)}%)</span>
                             </div>
-                            <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
-                              <div className="bg-teal-600 h-full rounded-full" style={{ width: `${pct}%` }} />
+                            <div className="progress-rail" style={{ margin: 0, height: 6 }}>
+                              <div className="progress-fill fill-teal" style={{ width: `${pct}%` }} />
                             </div>
                           </div>
                         );
                       })}
                     </div>
                   </div>
-                </Card>
+                </div>
               ))}
             </div>
-          </TabsContent>
+          )}
 
-          {/* =====================================================================
-              TAB 5: Sales Velocity Timeline
-              ===================================================================== */}
-          <TabsContent value="timeline" className="space-y-4">
-            <Card className="p-5 border-border bg-card shadow-xs">
+          {/* TAB 5: Sales Timeline */}
+          {activeTab === "timeline" && (
+            <div className="command-filter-box">
               <div className="mb-4">
-                <h3 className="font-bold text-base text-foreground flex items-center gap-2">
-                  <LineChart size={17} className="text-teal-600" />
+                <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                  <LineChart size={16} className="text-teal-600" />
                   حركة ومسار المبيعات التراكمية بمرور الأيام
                 </h3>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs text-slate-500 dark:text-slate-400">
                   تتبع نمو الإيراد المالي الإجمالي عبر تواريخ الحركات المسجلة
                 </p>
               </div>
@@ -1402,7 +1192,7 @@ export function TestDashboard() {
                         <stop offset="95%" stopColor="#0F766E" stopOpacity={0} />
                       </linearGradient>
                     </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" opacity={0.5} />
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" opacity={0.3} />
                     <XAxis dataKey="displayDate" tick={{ fill: "#64748b", fontSize: 11 }} />
                     <YAxis
                       tickFormatter={(val) => `${(val / 1000000).toFixed(0)}M`}
@@ -1410,7 +1200,7 @@ export function TestDashboard() {
                     />
                     <Tooltip
                       formatter={(val: number) => currency(val)}
-                      contentStyle={{ borderRadius: 12, direction: "rtl", textAlign: "right" }}
+                      contentStyle={{ borderRadius: 12, direction: "rtl", textAlign: "right", background: "#0f172a", color: "#fff", border: "none" }}
                     />
                     <Area
                       type="monotone"
@@ -1424,194 +1214,195 @@ export function TestDashboard() {
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
-            </Card>
-          </TabsContent>
-        </Tabs>
+            </div>
+          )}
+        </div>
       </main>
 
       {/* =========================================================================
-          MODAL 1: Single Governorate Focus Detail Modal
+          MODAL 1: Single Governorate In-depth Focus Modal
           ========================================================================= */}
-      <Dialog open={!!selectedGovModal} onOpenChange={(open) => !open && setSelectedGovModal(null)}>
-        {selectedGovModal && (
-          <DialogContent dir="rtl" className="max-w-2xl max-h-[85vh] overflow-y-auto">
-            <DialogHeader>
-              <div className="flex items-center justify-between">
-                <DialogTitle className="text-xl font-black flex items-center gap-2">
-                  <MapPin className="text-teal-600" />
+      {selectedGovModal && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 100,
+            background: "rgba(0,0,0,0.6)",
+            backdropFilter: "blur(8px)",
+            display: "grid",
+            placeItems: "center",
+            padding: 16,
+          }}
+          onClick={() => setSelectedGovModal(null)}
+        >
+          <div
+            className="command-filter-box"
+            style={{ maxWidth: 650, width: "100%", maxHeight: "85vh", overflowY: "auto" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-200 dark:border-slate-800">
+              <div className="flex items-center gap-2">
+                <MapPin className="text-teal-600" />
+                <h3 className="font-black text-lg text-slate-900 dark:text-slate-100">
                   كشف تحليلي مفصل — محافظة {selectedGovModal.governorate}
-                </DialogTitle>
-                <Badge
-                  className={`text-xs font-bold ${
-                    selectedGovModal.statusColor === "emerald"
-                      ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
-                      : "bg-teal-500/15 text-teal-700 dark:text-teal-300"
-                  }`}
-                >
-                  {selectedGovModal.status}
-                </Badge>
+                </h3>
               </div>
-              <DialogDescription className="text-xs">
-                ملخص الأداء المالي، والمندوبين، وأفضل المواد تصريفاً في المحافظة
-              </DialogDescription>
-            </DialogHeader>
+              <span className={`status-pill pill-${selectedGovModal.statusColor}`}>
+                {selectedGovModal.status}
+              </span>
+            </div>
 
-            <div className="space-y-4 pt-2">
+            <div className="space-y-4 text-xs">
               {/* Financial Highlights */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
-                <div className="p-3 bg-muted/40 rounded-xl">
-                  <span className="text-[11px] text-muted-foreground font-bold">المبيعات المحققة</span>
-                  <strong className="block text-sm font-black text-foreground mt-1 tabular">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-center">
+                <div className="p-3 bg-slate-100 dark:bg-slate-800/60 rounded-xl">
+                  <span className="text-slate-500 font-bold">المبيعات</span>
+                  <strong className="block text-sm font-black text-slate-900 dark:text-slate-100 mt-1 font-mono">
                     {currency(selectedGovModal.totalSales)}
                   </strong>
                 </div>
 
-                <div className="p-3 bg-muted/40 rounded-xl">
-                  <span className="text-[11px] text-muted-foreground font-bold">التارغت المطلوب</span>
-                  <strong className="block text-sm font-black text-muted-foreground mt-1 tabular">
+                <div className="p-3 bg-slate-100 dark:bg-slate-800/60 rounded-xl">
+                  <span className="text-slate-500 font-bold">التارغت</span>
+                  <strong className="block text-sm font-black text-slate-500 mt-1 font-mono">
                     {currency(selectedGovModal.targetAmount)}
                   </strong>
                 </div>
 
-                <div className="p-3 bg-muted/40 rounded-xl">
-                  <span className="text-[11px] text-muted-foreground font-bold">نسبة الإنجاز</span>
-                  <strong className="block text-sm font-black text-emerald-600 dark:text-emerald-400 mt-1 tabular">
+                <div className="p-3 bg-slate-100 dark:bg-slate-800/60 rounded-xl">
+                  <span className="text-slate-500 font-bold">نسبة الإنجاز</span>
+                  <strong className="block text-sm font-black text-emerald-500 mt-1 font-mono">
                     {selectedGovModal.achievementRate.toFixed(1)}%
                   </strong>
                 </div>
 
-                <div className="p-3 bg-muted/40 rounded-xl">
-                  <span className="text-[11px] text-muted-foreground font-bold">القطع المباعة</span>
-                  <strong className="block text-sm font-black text-teal-600 dark:text-teal-400 mt-1 tabular">
+                <div className="p-3 bg-slate-100 dark:bg-slate-800/60 rounded-xl">
+                  <span className="text-slate-500 font-bold">القطع المباعة</span>
+                  <strong className="block text-sm font-black text-teal-600 dark:text-teal-400 mt-1 font-mono">
                     {selectedGovModal.totalQuantity.toLocaleString()}
                   </strong>
                 </div>
               </div>
 
-              {/* Best Performers in Gov */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-                <div className="p-3 border border-border rounded-xl">
-                  <span className="text-muted-foreground">أفضل مندوب بالمحافظة:</span>
-                  <strong className="block text-sm font-bold text-foreground mt-0.5">
+              {/* Best in Gov */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                <div className="p-3 border border-slate-200 dark:border-slate-800 rounded-xl">
+                  <span className="text-slate-500">أفضل مندوب:</span>
+                  <strong className="block text-sm font-bold text-slate-900 dark:text-slate-100 mt-0.5">
                     {selectedGovModal.bestDelegate}
                   </strong>
-                  <span className="text-[11px] text-teal-600 tabular">
-                    {currency(selectedGovModal.bestDelegateSales)}
-                  </span>
+                  <span className="text-teal-600 font-mono">{currency(selectedGovModal.bestDelegateSales)}</span>
                 </div>
 
-                <div className="p-3 border border-border rounded-xl">
-                  <span className="text-muted-foreground">أفضل مادة طلباً:</span>
-                  <strong className="block text-sm font-bold text-foreground mt-0.5">
+                <div className="p-3 border border-slate-200 dark:border-slate-800 rounded-xl">
+                  <span className="text-slate-500">أفضل مادة:</span>
+                  <strong className="block text-sm font-bold text-slate-900 dark:text-slate-100 mt-0.5">
                     {selectedGovModal.bestProduct}
                   </strong>
-                  <span className="text-[11px] text-teal-600 tabular">
-                    {currency(selectedGovModal.bestProductSales)}
-                  </span>
+                  <span className="text-teal-600 font-mono">{currency(selectedGovModal.bestProductSales)}</span>
                 </div>
 
-                <div className="p-3 border border-border rounded-xl">
-                  <span className="text-muted-foreground">أفضل شركة موردة:</span>
-                  <strong className="block text-sm font-bold text-foreground mt-0.5">
+                <div className="p-3 border border-slate-200 dark:border-slate-800 rounded-xl">
+                  <span className="text-slate-500">أفضل شركة:</span>
+                  <strong className="block text-sm font-bold text-slate-900 dark:text-slate-100 mt-0.5">
                     {selectedGovModal.bestCompany}
                   </strong>
-                  <span className="text-[11px] text-muted-foreground">الأعلى طلباً</span>
+                  <span className="text-slate-400">الأعلى طلباً</span>
                 </div>
               </div>
 
-              {/* Recent Sales in this Gov */}
-              <div>
-                <h5 className="font-bold text-xs text-foreground mb-2">آخر الحركات في {selectedGovModal.governorate}:</h5>
-                <div className="border border-border rounded-xl overflow-hidden max-h-48 overflow-y-auto">
-                  <table className="w-full text-[11px] text-right">
-                    <thead className="bg-muted/70 text-muted-foreground font-bold sticky top-0">
-                      <tr>
-                        <th className="p-2">المندوب</th>
-                        <th className="p-2">المادة</th>
-                        <th className="p-2 text-center">العدد</th>
-                        <th className="p-2 text-left">المبلغ</th>
-                        <th className="p-2 text-center">التاريخ</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border">
-                      {selectedGovModal.recentSales.map((r) => (
-                        <tr key={r.id} className="hover:bg-muted/30">
-                          <td className="p-2 font-bold">{r.delegateName}</td>
-                          <td className="p-2 text-teal-700 dark:text-teal-300">{r.item}</td>
-                          <td className="p-2 text-center tabular">{r.quantity}</td>
-                          <td className="p-2 text-left font-bold tabular">{currency(r.totalAmount)}</td>
-                          <td className="p-2 text-center text-muted-foreground tabular">{r.date}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+              {/* Action */}
+              <div className="flex justify-between items-center pt-3 border-t border-slate-200 dark:border-slate-800">
+                <button
+                  onClick={() => {
+                    setFilters({ ...filters, governorate: selectedGovModal.governorate });
+                    setSelectedGovModal(null);
+                  }}
+                  className="glass-btn btn-accent"
+                >
+                  تصفية لوحة التحكم لهذه المحافظة فقط
+                </button>
+
+                <button
+                  onClick={() => setSelectedGovModal(null)}
+                  className="glass-btn"
+                >
+                  إغلاق
+                </button>
               </div>
             </div>
-
-            <DialogFooter className="pt-2 flex justify-between">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setFilters({ ...filters, governorate: selectedGovModal.governorate });
-                  setSelectedGovModal(null);
-                }}
-              >
-                تصفية Dashboard لهذه المحافظة فقط
-              </Button>
-              <Button size="sm" onClick={() => setSelectedGovModal(null)}>
-                إغلاق
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        )}
-      </Dialog>
+          </div>
+        </div>
+      )}
 
       {/* =========================================================================
           MODAL 2: Google Sheets URL Connect Modal
           ========================================================================= */}
-      <Dialog open={configModalOpen} onOpenChange={setConfigModalOpen}>
-        <DialogContent dir="rtl" className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="text-lg font-bold flex items-center gap-2">
-              <Globe size={18} className="text-teal-600" />
-              ربط مصدر بيانات Google Sheets
-            </DialogTitle>
-            <DialogDescription className="text-xs text-muted-foreground">
-              أدخل رابط أو معرف جدول Google Sheets المنشور لجلب البيانات الحية مباشرة
-            </DialogDescription>
-          </DialogHeader>
+      {configModalOpen && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 100,
+            background: "rgba(0,0,0,0.6)",
+            backdropFilter: "blur(8px)",
+            display: "grid",
+            placeItems: "center",
+            padding: 16,
+          }}
+          onClick={() => setConfigModalOpen(false)}
+        >
+          <div
+            className="command-filter-box"
+            style={{ maxWidth: 480, width: "100%" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-200 dark:border-slate-800">
+              <div className="flex items-center gap-2">
+                <Globe size={18} className="text-teal-600" />
+                <h3 className="font-black text-base text-slate-900 dark:text-slate-100">
+                  ربط مصدر بيانات Google Sheets
+                </h3>
+              </div>
+              <button onClick={() => setConfigModalOpen(false)} className="text-slate-400 hover:text-slate-600">
+                <X size={16} />
+              </button>
+            </div>
 
-          <div className="space-y-3 pt-2">
-            <label className="space-y-1 block">
-              <span className="text-xs font-bold text-foreground">رابط Google Sheets:</span>
-              <Input
-                value={tempUrlInput}
-                onChange={(e) => setTempUrlInput(e.target.value)}
-                placeholder="https://docs.google.com/spreadsheets/d/e/.../pubhtml أو ID"
-                className="text-xs"
-              />
-            </label>
+            <div className="space-y-3 text-xs">
+              <label className="block">
+                <span className="font-bold text-slate-800 dark:text-slate-200 block mb-1">
+                  رابط جدول Google Sheets المنشور:
+                </span>
+                <input
+                  type="text"
+                  value={tempUrlInput}
+                  onChange={(e) => setTempUrlInput(e.target.value)}
+                  placeholder="https://docs.google.com/spreadsheets/d/e/.../pubhtml أو ID"
+                  className="filter-custom-input"
+                />
+              </label>
 
-            <div className="p-3 bg-muted/40 rounded-xl text-xs space-y-1 text-muted-foreground">
-              <strong className="text-foreground block font-bold">تعليمات النشر في Google Sheets:</strong>
-              <p>1. افتح الجدول في Google Sheets.</p>
-              <p>2. اضغط على ملف (File) ⬅️ مشاركة (Share) ⬅️ نشر على الويب (Publish to web).</p>
-              <p>3. الصق الرابط هنا واضغط حفظ وتحديث.</p>
+              <div className="p-3 bg-slate-100 dark:bg-slate-800/60 rounded-xl space-y-1 text-slate-500 dark:text-slate-400">
+                <strong className="text-slate-800 dark:text-slate-200 block font-bold">تعليمات النشر:</strong>
+                <p>1. افتح الجدول في Google Sheets.</p>
+                <p>2. اضغط على ملف (File) ⬅️ مشاركة (Share) ⬅️ نشر على الويب (Publish to web).</p>
+                <p>3. الصق الرابط هنا واضغط حفظ وتحديث.</p>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button onClick={() => setConfigModalOpen(false)} className="glass-btn">
+                  إلغاء
+                </button>
+                <button onClick={handleSaveSheetUrl} className="glass-btn btn-accent">
+                  حفظ وجلب البيانات الحية
+                </button>
+              </div>
             </div>
           </div>
-
-          <DialogFooter className="pt-2">
-            <Button variant="outline" size="sm" onClick={() => setConfigModalOpen(false)}>
-              إلغاء
-            </Button>
-            <Button size="sm" onClick={handleSaveSheetUrl} className="btn-primary">
-              حفظ وجلب البيانات
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        </div>
+      )}
     </div>
   );
 }
