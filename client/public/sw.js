@@ -1,8 +1,9 @@
-const CACHE_NAME = 'hisabati-ghadeer-v4';
+const CACHE_NAME = 'hisabati-ghadeer-v5';
 const STATIC_ASSETS = [
   '/',
   '/dashboard',
   '/delegates',
+  '/test',
   '/manifest.webmanifest',
   '/icon.svg',
   '/icon-maskable.svg'
@@ -35,9 +36,11 @@ self.addEventListener('fetch', (event) => {
   const request = event.request;
   const url = new URL(request.url);
 
-  // Exclude API requests, dev server scripts, and live assets
+  // Exclude localhost dev server, API requests, dev server scripts, and live assets
   if (
     request.method !== 'GET' ||
+    url.hostname === 'localhost' ||
+    url.hostname === '127.0.0.1' ||
     url.pathname.startsWith('/api/') ||
     url.pathname.startsWith('/@') ||
     url.pathname.startsWith('/src/') ||

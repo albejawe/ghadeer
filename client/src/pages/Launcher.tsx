@@ -1,4 +1,4 @@
-import { ArrowLeft, MoonStar, Sun, Users, Warehouse } from "lucide-react";
+import { ArrowLeft, MoonStar, Sparkles, Sun, Users, Warehouse } from "lucide-react";
 import { Link } from "wouter";
 import { useTheme } from "@/contexts/ThemeContext";
 
@@ -75,6 +75,30 @@ export function Launcher() {
 
             <div className="portal-card-action">
               <span>دخول المندوبين</span>
+              <div className="portal-arrow">
+                <ArrowLeft size={16} />
+              </div>
+            </div>
+          </Link>
+
+          {/* 3. لوحة المراقبة الذكية /test */}
+          <Link href="/test" className="portal-card col-span-1 md:col-span-2 border-teal-500/30 hover:border-teal-500 transition-all">
+            <div className="portal-card-head">
+              <div className="portal-icon-box" style={{ background: "rgba(15, 118, 110, 0.15)", color: "#0F766E" }}>
+                <Sparkles size={28} />
+              </div>
+              <span className="portal-tag" style={{ background: "rgba(15, 118, 110, 0.15)", color: "#0F766E" }}>
+                لوحة تحكم ذكية
+              </span>
+            </div>
+
+            <div className="portal-card-info">
+              <h2>لوحة المراقبة والتحليل الميداني (/test)</h2>
+              <p>مراقبة أداء المبيعات والمحافظات، تحقيق التارغت، ترتيب المندوبين، وجودة البيانات عبر Google Sheets</p>
+            </div>
+
+            <div className="portal-card-action">
+              <span>دخول لوحة المراقبة (/test)</span>
               <div className="portal-arrow">
                 <ArrowLeft size={16} />
               </div>
