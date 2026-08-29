@@ -21,6 +21,8 @@ import {
   deleteInvoiceWithSync,
 } from "../invoiceHandlers.js";
 import { applyInvoiceFilters } from "../../shared/invoiceLogic.js";
+import { registerLocalApi } from "../localApi.js";
+import { registerLocalAdminApi } from "../localAdminApi.js";
 
 export function buildApp() {
   const app = express();
@@ -29,6 +31,8 @@ export function buildApp() {
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
   registerStorageProxy(app);
   registerOAuthRoutes(app);
+  registerLocalApi(app);
+  registerLocalAdminApi(app);
   app.get("/api/sync/run", async (_req, res) => {
     try {
       const result = await (await import("../sync.js")).runSync();
