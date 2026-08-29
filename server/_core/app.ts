@@ -23,6 +23,8 @@ import {
 import { applyInvoiceFilters } from "../../shared/invoiceLogic.js";
 import { registerLocalApi } from "../localApi.js";
 import { registerLocalAdminApi } from "../localAdminApi.js";
+import { registerLocalV2CoreApi } from "../localV2CoreApi.js";
+import { registerLocalV2OperationsApi } from "../localV2OperationsApi.js";
 
 export function buildApp() {
   const app = express();
@@ -31,6 +33,8 @@ export function buildApp() {
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
   registerStorageProxy(app);
   registerOAuthRoutes(app);
+  registerLocalV2CoreApi(app);
+  registerLocalV2OperationsApi(app);
   registerLocalApi(app);
   registerLocalAdminApi(app);
   app.get("/api/sync/run", async (_req, res) => {

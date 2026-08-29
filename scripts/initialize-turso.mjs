@@ -3,6 +3,10 @@ import { createClient } from "@libsql/client";
 
 dotenv.config({ path: process.env.TURSO_ENV_FILE || undefined, quiet: true });
 
+if (process.env.ALLOW_DESTRUCTIVE_RESET !== "YES") {
+  throw new Error("Destructive reset blocked. Set ALLOW_DESTRUCTIVE_RESET=YES only for an intentional full reset.");
+}
+
 if (!process.env.TURSO_DATABASE_URL || !process.env.TURSO_AUTH_TOKEN) {
   throw new Error("TURSO_DATABASE_URL and TURSO_AUTH_TOKEN are required");
 }
