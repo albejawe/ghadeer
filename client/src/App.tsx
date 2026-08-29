@@ -8,7 +8,6 @@ import Delegates from "./pages/Delegates";
 import Home from "./pages/Home";
 import Launcher from "./pages/Launcher";
 import SharedLink from "./pages/SharedLink";
-import TestDashboard from "./pages/TestDashboard";
 
 function Router() {
   // make sure to consider if you need authentication for certain routes
@@ -17,7 +16,6 @@ function Router() {
       <Route path={"/"} component={Launcher} />
       <Route path={"/dashboard"} component={Home} />
       <Route path={"/delegates"} component={Delegates} />
-      <Route path={"/test"} component={TestDashboard} />
       <Route path={"/shared/:id"} component={SharedLink} />
       <Route path={"/404"} component={NotFound} />
       {/* Final fallback route */}
