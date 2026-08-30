@@ -65,6 +65,46 @@ router.post("/representatives", async (req, res) => {
   } catch { return res.status(400).json({ ok: false, error: "REPRESENTATIVE_CREATE_FAILED" }); }
 });
 
+router.delete("/representatives/:id", async (req, res) => {
+  try {
+    const user = await signedIn(req, res, true);
+    if (!user) return;
+    const id = String(req.params.id);
+    if (!id) return res.status(400).json({ ok: false, error: "INVALID_ID" });
+
+    const db = getTursoClient();
+    const now = new Date().toISOString();
+
+    const salesCheck = await db.execute({
+      sql: "SELECT COUNT(*) as count FROM sales WHERE representative_id = ?",
+      args: [id],
+    });
+    const salesCount = Number(salesCheck.rows[0]?.count || 0);
+
+    if (salesCount > 0) {
+      await db.execute({
+        sql: "UPDATE representatives SET active = 0, updated_at = ? WHERE id = ?",
+        args: [now, id],
+      });
+    } else {
+      await db.execute({
+        sql: "DELETE FROM representatives WHERE id = ?",
+        args: [id],
+      });
+    }
+
+    await db.execute({
+      sql: "INSERT INTO audit_logs (id, actor_id, action, entity_type, entity_id, details_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      args: [randomUUID(), user.id, "delete", "representative", id, JSON.stringify({ salesCount }), now],
+    });
+
+    return res.json({ ok: true, salesCount });
+  } catch (err) {
+    console.error("Failed to delete representative:", err);
+    return res.status(400).json({ ok: false, error: "REPRESENTATIVE_DELETE_FAILED" });
+  }
+});
+
 export function registerLocalAdminApi(app: { use: (path: string, handler: typeof router) => void }) {
   app.use("/api/local", router);
 }
