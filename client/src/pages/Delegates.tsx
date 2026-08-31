@@ -693,6 +693,7 @@ function AppShell({
           reference={reference}
           records={targets}
           setTargets={setTargets}
+          sales={sales}
           showToast={showToast}
           reload={reload}
         />
@@ -1696,12 +1697,14 @@ function TargetsSection({
   reference,
   records,
   setTargets,
+  sales,
   showToast,
   reload,
 }: {
   reference: Reference;
   records: TargetRecord[];
   setTargets: React.Dispatch<React.SetStateAction<TargetRecord[]>>;
+  sales: Sale[];
   showToast: (text: string, type?: "success" | "error" | "info") => void;
   reload: (silent?: boolean) => void;
 }) {
@@ -1711,6 +1714,40 @@ function TargetsSection({
     Record<string, { quantity: string; amount: string }>
   >({});
   const [savingGov, setSavingGov] = useState<string | null>(null);
+  const [loadingMonth, setLoadingMonth] = useState(false);
+
+  // Dynamically fetch targets whenever year or month changes
+  useEffect(() => {
+    let isMounted = true;
+    async function fetchPeriodTargets() {
+      if (!year || !month) return;
+      setLoadingMonth(true);
+      try {
+        const res = await api<{ targets: TargetRecord[] }>(
+          `/targets?year=${year}&month=${month}`
+        );
+        if (isMounted && res?.targets) {
+          setTargets(res.targets);
+          const newVals: Record<string, { quantity: string; amount: string }> = {};
+          for (const t of res.targets) {
+            newVals[t.governorateId] = {
+              quantity: String(t.targetQuantity || ""),
+              amount: t.targetAmount != null ? String(t.targetAmount) : "",
+            };
+          }
+          setValues(newVals);
+        }
+      } catch {
+        // Fallback to local
+      } finally {
+        if (isMounted) setLoadingMonth(false);
+      }
+    }
+    void fetchPeriodTargets();
+    return () => {
+      isMounted = false;
+    };
+  }, [year, month, setTargets]);
 
   const save = async (governorateId: string) => {
     setSavingGov(governorateId);
@@ -1763,13 +1800,15 @@ function TargetsSection({
     }
   };
 
+  const periodPrefix = `${year}-${String(month).padStart(2, "0")}`;
+
   return (
     <section className="local-content">
       <div className="local-section-head">
         <div>
-          <span className="local-kicker">خطة الشهر</span>
+          <span className="local-kicker">خطة الشهر ومتابعة الإنجاز</span>
           <h2>أهداف المحافظات (التارغت)</h2>
-          <p>تعديل وتحديد خطط كل المحافظات باستجابة فورية.</p>
+          <p>تحديد خطط كل المحافظات ومتابعة نسبة الإنجاز والقطع المتحققة لحظياً.</p>
         </div>
         <Target />
       </div>
@@ -1806,46 +1845,95 @@ function TargetsSection({
                 : String(existing.targetAmount),
           };
           const isSaving = savingGov === gov.id;
+
+          // Calculate live achieved sales for this gov in this period
+          const govSales = sales.filter(
+            (s) =>
+              s.governorateId === gov.id &&
+              s.saleDate &&
+              s.saleDate.startsWith(periodPrefix)
+          );
+          const achievedUnits = govSales.reduce((sum, s) => sum + s.quantity, 0);
+          const targetUnits = Number(value.quantity) || existing?.targetQuantity || 0;
+          const percentage =
+            targetUnits > 0
+              ? Math.min(Math.round((achievedUnits / targetUnits) * 100), 100)
+              : 0;
+
+          const badgeStatus =
+            percentage >= 100
+              ? "achieved"
+              : percentage >= 65
+              ? "near"
+              : "in-progress";
+
+          const badgeLabel =
+            targetUnits === 0
+              ? "لم يحدد"
+              : percentage >= 100
+              ? "✓ محقق بالكامل"
+              : percentage >= 65
+              ? `قريب (${percentage}%)`
+              : `قيد التقدم (${percentage}%)`;
+
+          const progressColor =
+            percentage >= 100 ? "green" : percentage >= 65 ? "amber" : "slate";
+
           return (
             <div className="local-target-card" key={gov.id}>
-              <div>
-                <strong>{gov.name}</strong>
-                <span>
-                  {existing
-                    ? `محفوظ · ${number(existing.targetQuantity)} قطعة`
-                    : "لم يحدد بعد"}
+              <div className="local-target-card-header">
+                <div>
+                  <strong style={{ fontSize: 14 }}>{gov.name}</strong>
+                  <span style={{ fontSize: 11, color: "#667a75", display: "block", marginTop: 2 }}>
+                    المتحقق: <b>{number(achievedUnits)}</b> / المستهدف: <b>{number(targetUnits)}</b> قطعة
+                  </span>
+                </div>
+                <span className={`local-target-badge ${badgeStatus}`}>
+                  {badgeLabel}
                 </span>
               </div>
-              <input
-                type="number"
-                min="0"
-                placeholder="عدد القطع المستهدف"
-                value={value.quantity}
-                onChange={(e) =>
-                  setValues({
-                    ...values,
-                    [gov.id]: { ...value, quantity: e.target.value },
-                  })
-                }
-              />
-              <input
-                type="number"
-                min="0"
-                placeholder="مبلغ مالي (اختياري)"
-                value={value.amount}
-                onChange={(e) =>
-                  setValues({
-                    ...values,
-                    [gov.id]: { ...value, amount: e.target.value },
-                  })
-                }
-              />
+
+              {/* شريط الإنجاز المرئي */}
+              <div className="local-target-progress-bg">
+                <div
+                  className={`local-target-progress-fill ${progressColor}`}
+                  style={{ width: `${percentage}%` }}
+                />
+              </div>
+
+              <div className="local-target-inputs">
+                <input
+                  type="number"
+                  min="0"
+                  placeholder="القطع المستهدفة"
+                  value={value.quantity}
+                  onChange={(e) =>
+                    setValues({
+                      ...values,
+                      [gov.id]: { ...value, quantity: e.target.value },
+                    })
+                  }
+                />
+                <input
+                  type="number"
+                  min="0"
+                  placeholder="المبلغ (اختياري)"
+                  value={value.amount}
+                  onChange={(e) =>
+                    setValues({
+                      ...values,
+                      [gov.id]: { ...value, amount: e.target.value },
+                    })
+                  }
+                />
+              </div>
+
               <button
                 className="local-secondary"
-                disabled={isSaving}
+                disabled={isSaving || loadingMonth}
                 onClick={() => void save(gov.id)}
               >
-                {isSaving ? "جارٍ الحفظ..." : "حفظ الهدف"}
+                {isSaving ? "جارٍ الحفظ..." : "حفظ هدف المحافظة"}
               </button>
             </div>
           );
