@@ -1,9 +1,7 @@
-const CACHE_NAME = 'hisabati-ghadeer-v5';
+const CACHE_NAME = 'ghadeer-sales-v6';
 const STATIC_ASSETS = [
   '/',
-  '/dashboard',
   '/delegates',
-  '/test',
   '/manifest.webmanifest',
   '/icon.svg',
   '/icon-maskable.svg'

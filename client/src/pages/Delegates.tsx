@@ -20,6 +20,8 @@ import {
   Users,
   X,
 } from "lucide-react";
+import { SaleNotifications } from "../components/SaleNotifications";
+import { SalesHistory } from "../components/SalesHistory";
 import "./delegates.css";
 
 // =========================================================================
@@ -114,7 +116,7 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 const number = (value: number | string | null | undefined) =>
-  Number(value || 0).toLocaleString("ar-IQ");
+  Number(value || 0).toLocaleString("en-US");
 const money = (value: number | string | null | undefined) =>
   `${number(value)} د.ع`;
 
@@ -178,6 +180,7 @@ function SearchableCombobox<T extends { id: string; name: string; extra?: string
   placeholder = "ابحث أو اختر...",
   disabled = false,
   required = false,
+  showSearchIcon = true,
 }: {
   label: string;
   items: T[];
@@ -186,6 +189,7 @@ function SearchableCombobox<T extends { id: string; name: string; extra?: string
   placeholder?: string;
   disabled?: boolean;
   required?: boolean;
+  showSearchIcon?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -249,7 +253,7 @@ function SearchableCombobox<T extends { id: string; name: string; extra?: string
             }
           }}
         />
-        <Search className="local-combobox-icon-search" />
+        {showSearchIcon && <Search className="local-combobox-icon-search" />}
 
         {value && !disabled && (
           <button
@@ -574,48 +578,39 @@ function AppShell({
   reload: (silent?: boolean) => void;
   onLogout: () => void;
 }) {
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonthStr = String(now.getMonth() + 1).padStart(2, "0");
+  const previous = new Date(currentYear, now.getMonth() - 1, 1);
+  const previousPrefix = `${previous.getFullYear()}-${String(previous.getMonth() + 1).padStart(2, "0")}`;
+  const [period, setPeriod] = useState<"current" | "previous" | "all" | "custom">("current");
+  const [customMonth, setCustomMonth] = useState(`${currentYear}-${currentMonthStr}`);
+  const periodPrefix = period === "current" ? `${currentYear}-${currentMonthStr}` : period === "previous" ? previousPrefix : customMonth;
+  const periodLabel = period === "all" ? "كل الفترات" : period === "current" ? "هذا الشهر" : period === "previous" ? "الشهر السابق" : customMonth || "فترة مخصصة";
   const govName = reference.governorates.find(
     (item) => item.id === user.governorateId
   )?.name;
-
-  const currentSales =
-    user.role === "admin"
-      ? sales
-      : sales.filter((item) => item.governorateId === user.governorateId);
-
-  // Filter current month sales for accurate monthly alignment with monthly warehouse sales
-  const currentYear = new Date().getFullYear();
-  const currentMonthStr = String(new Date().getMonth() + 1).padStart(2, "0");
-  const currentMonthPrefix = `${currentYear}-${currentMonthStr}`;
-
-  const monthlySales = currentSales.filter((item) =>
-    item.saleDate.startsWith(currentMonthPrefix)
-  );
-
-  const monthlyUnits = monthlySales.reduce((sum, item) => sum + item.quantity, 0);
-  const monthlyAmount = monthlySales.reduce((sum, item) => sum + item.totalAmount, 0);
-
-  const monthlyWarehouseRecords = warehouse.filter((w) =>
-    w.saleDate
-      ? w.saleDate.startsWith(currentMonthPrefix)
-      : w.year === currentYear && w.month === Number(currentMonthStr)
-  );
-  const warehouseUnits = monthlyWarehouseRecords.reduce((sum, item) => sum + item.quantity, 0);
+  const currentSales = user.role === "admin" ? sales : sales.filter((item) => item.governorateId === user.governorateId);
+  const periodSales = period === "all" ? currentSales : currentSales.filter((item) => item.saleDate.startsWith(periodPrefix));
+  const periodWarehouse = period === "all" ? warehouse : warehouse.filter((item) => item.saleDate ? item.saleDate.startsWith(periodPrefix) : `${item.year}-${String(item.month).padStart(2, "0")}` === periodPrefix);
+  const monthlyUnits = periodSales.reduce((sum, item) => sum + item.quantity, 0);
+  const monthlyAmount = periodSales.reduce((sum, item) => sum + item.totalAmount, 0);
+  const warehouseUnits = periodWarehouse.reduce((sum, item) => sum + item.quantity, 0);
   const netWarehouseUnits = warehouseUnits - monthlyUnits;
 
   return (
     <main className="local-app">
       <header className="local-header">
         <div>
-          <span className="local-kicker">نبع الغدير العلمي</span>
-          <h1>{user.role === "admin" ? "لوحة الإدارة والمتابعة" : "إدخال المبيعات السريعة"}</h1>
+          <h1>{user.role === "admin" ? "لوحة المندوبين" : "إدخال المبيعات"}</h1>
           <p>
             {user.role === "admin"
-              ? "التحكم بالمواد، المحافظات، الأهداف، والمندوبين باستجابة فورية."
+              ? "المبيعات، المذاخر، الأهداف، والفريق."
               : `${user.displayName}${govName ? ` · ${govName}` : ""}`}
           </p>
         </div>
         <div className="local-header-actions">
+          {user.role === "admin" && <SaleNotifications />}
           <button
             className="local-icon"
             onClick={() => reload(false)}
@@ -634,29 +629,37 @@ function AppShell({
           </button>
         </div>
       </header>
-
+      <section className="local-period-bar" aria-label="فترة الإحصائيات">
+        <div><strong>الفترة: {periodLabel}</strong><span>كل الإحصائيات والسجل أدناه تخص هذه الفترة.</span></div>
+        <div className="local-period-actions">
+          <button type="button" className={period === "current" ? "active" : ""} onClick={() => setPeriod("current")}>هذا الشهر</button>
+          <button type="button" className={period === "previous" ? "active" : ""} onClick={() => setPeriod("previous")}>الشهر السابق</button>
+          <button type="button" className={period === "all" ? "active" : ""} onClick={() => setPeriod("all")}>كل الفترات</button>
+          <label className={period === "custom" ? "active custom" : "custom"}>مخصص<input type="month" value={customMonth} onChange={(event) => { setCustomMonth(event.target.value); setPeriod("custom"); }} /></label>
+        </div>
+      </section>
       {error && <div className="local-error local-wide">{error}</div>}
 
       <section className="local-summary">
         <div>
-          <span>قطع المندوبين (الشهر الحالي)</span>
+          <span>قطع المندوبين</span>
           <strong>{number(monthlyUnits)}</strong>
         </div>
         <div>
-          <span>مبالغ المندوبين (الشهر الحالي)</span>
+          <span>مبالغ المندوبين</span>
           <strong>{money(monthlyAmount)}</strong>
         </div>
         <div>
-          <span>{user.role === "admin" ? "صافي المذخر الشهري" : "العمليات (الشهر الحالي)"}</span>
+          <span>{user.role === "admin" ? "صافي المذخر" : "العمليات"}</span>
           <strong>
             {user.role === "admin"
               ? number(netWarehouseUnits)
-              : number(monthlySales.length)}
+              : number(periodSales.length)}
           </strong>
         </div>
         {user.role === "admin" && (
           <div>
-            <span>إجمالي المذخر الشهري</span>
+            <span>إجمالي المذخر</span>
             <strong>{number(warehouseUnits)}</strong>
           </div>
         )}
@@ -688,7 +691,8 @@ function AppShell({
         <SalesSection
           user={user}
           reference={reference}
-          sales={currentSales}
+          sales={periodSales}
+          warehouseUnits={warehouseUnits}
           setSales={setSales}
           showToast={showToast}
           reload={reload}
@@ -697,7 +701,7 @@ function AppShell({
       {section === "warehouse" && user.role === "admin" && (
         <WarehouseSection
           reference={reference}
-          records={warehouse}
+          records={periodWarehouse}
           setWarehouse={setWarehouse}
           showToast={showToast}
           reload={reload}
@@ -739,6 +743,7 @@ function SalesSection({
   user,
   reference,
   sales,
+  warehouseUnits,
   setSales,
   showToast,
   reload,
@@ -746,6 +751,7 @@ function SalesSection({
   user: User;
   reference: Reference;
   sales: Sale[];
+  warehouseUnits: number;
   setSales: React.Dispatch<React.SetStateAction<Sale[]>>;
   showToast: (text: string, type?: "success" | "error" | "info") => void;
   reload: (silent?: boolean) => void;
@@ -760,7 +766,7 @@ function SalesSection({
   const [companyId, setCompanyId] = useState(
     reference.companies[0]?.id || ""
   );
-  const [saleDate, setSaleDate] = useState(today);
+  const [saleDate, setSaleDate] = useState("");
 
   // Single Item State
   const [materialId, setMaterialId] = useState("");
@@ -814,6 +820,10 @@ function SalesSection({
   // Submit Single Sale (Optimistic)
   const submitSingle = async (event: FormEvent) => {
     event.preventDefault();
+    if (!saleDate) {
+      showToast("اختر تاريخ البيع قبل الحفظ", "error");
+      return;
+    }
     if (!representativeId || !materialId || !chosenMaterial) {
       showToast("يرجى اختيار المندوب والمادة", "error");
       return;
@@ -876,6 +886,10 @@ function SalesSection({
   // Submit Multi-Item Batch (Optimistic & Atomic Endpoint)
   const submitBatch = async (event: FormEvent) => {
     event.preventDefault();
+    if (!saleDate) {
+      showToast("اختر تاريخ البيع قبل الحفظ", "error");
+      return;
+    }
     if (!representativeId) {
       showToast("يرجى اختيار المندوب", "error");
       return;
@@ -967,7 +981,7 @@ function SalesSection({
         <div>
           <span className="local-kicker">إدخال فائق السلاسة</span>
           <h2>تسجيل مبيعات المندوبين</h2>
-          <p>استجابة فورية 0ms، دعم البحث بالكيبورد، وأزرار كميات جاهزة.</p>
+          <p>اختر البيانات المطلوبة ثم احفظ البيع.</p>
         </div>
         <BarChart3 />
       </div>
@@ -1041,6 +1055,7 @@ function SalesSection({
               onChange={setMaterialId}
               placeholder="اكتب اسم المادة للبحث الفوري..."
               required
+            showSearchIcon={false}
             />
 
             <div className="local-field">
@@ -1113,7 +1128,7 @@ function SalesSection({
           </div>
 
           <button className="local-primary">
-            <Check /> حفظ البيع فوراً (0ms)
+            <Check /> حفظ البيع
           </button>
         </form>
       ) : (
@@ -1295,132 +1310,7 @@ function SalesSection({
         </form>
       )}
 
-      <div className="local-section-head compact">
-        <div>
-          <h2>آخر الإدخالات ({filteredSales.length})</h2>
-          <p>بحث وفلترة فورية وتصدير إلى Excel.</p>
-        </div>
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <button
-            type="button"
-            onClick={() => {
-              if (!filteredSales.length) {
-                showToast("لا توجد مبيعات لتصديرها", "info");
-                return;
-              }
-              const headers = ["التاريخ", "المحافظة", "المندوب", "الشركة", "المادة", "الكمية", "سعر المفرد", "المجموع", "المشرف"];
-              const rows = filteredSales.map((s) => [
-                s.saleDate,
-                `"${s.governorate}"`,
-                `"${s.representative}"`,
-                `"${s.company}"`,
-                `"${s.material}"`,
-                s.quantity,
-                s.unitPrice,
-                s.totalAmount,
-                `"${s.supervisor}"`,
-              ]);
-              const csvContent = "\uFEFF" + [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
-              const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-              const url = URL.createObjectURL(blob);
-              const link = document.createElement("a");
-              link.setAttribute("href", url);
-              link.setAttribute("download", `sales_report_${today}.csv`);
-              document.body.appendChild(link);
-              link.click();
-              document.body.removeChild(link);
-              showToast("✓ تم تصدير التقرير (Excel / CSV) بنجاح");
-            }}
-            style={{
-              background: "#e7f4f0",
-              color: "#087f6a",
-              border: "1px solid #cce8e0",
-              borderRadius: 10,
-              padding: "0 12px",
-              height: 36,
-              cursor: "pointer",
-              fontSize: 11,
-              fontWeight: 800,
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 5,
-              whiteSpace: "nowrap",
-            }}
-            title="تصدير المبيعات الحالية كملف Excel"
-          >
-            <Download size={13} />
-            <span>تصدير Excel</span>
-          </button>
-
-          <div style={{ position: "relative", width: 180 }}>
-            <input
-              type="text"
-              placeholder="بحث في العمليات..."
-              value={historySearch}
-              onChange={(e) => setHistorySearch(e.target.value)}
-              style={{
-                width: "100%",
-                height: 36,
-                padding: "0 30px 0 10px",
-                borderRadius: 10,
-                border: "1px solid #dfe8e5",
-                background: "#fff",
-                fontSize: 11,
-                fontWeight: 700,
-              }}
-            />
-          <Search
-            size={14}
-            style={{
-              position: "absolute",
-              right: 9,
-              top: "50%",
-              transform: "translateY(-50%)",
-              color: "#94a3b8",
-            }}
-          />
-          {historySearch && (
-            <button
-              type="button"
-              onClick={() => setHistorySearch("")}
-              style={{
-                position: "absolute",
-                left: 8,
-                top: "50%",
-                transform: "translateY(-50%)",
-                background: "transparent",
-                border: "none",
-                color: "#64748b",
-                cursor: "pointer",
-              }}
-            >
-              ✕
-            </button>
-          )}
-          </div>
-        </div>
-      </div>
-
-      <div className="local-list">
-        {filteredSales.slice(0, 15).map((item) => (
-          <div className="local-list-row" key={item.id}>
-            <div>
-              <strong>{item.material}</strong>
-              <span>
-                {item.representative} · {item.governorate} · {item.saleDate}
-              </span>
-            </div>
-            <b style={{ textAlign: "left" }}>
-              {number(item.quantity)} قطعة
-              <br />
-              <small>{money(item.totalAmount)}</small>
-            </b>
-          </div>
-        ))}
-        {!filteredSales.length && (
-          <div className="local-empty">لا توجد إدخالات مطابقة.</div>
-        )}
-      </div>
+      <SalesHistory sales={sales} warehouseUnits={warehouseUnits} onRefresh={() => reload(true)} onMessage={showToast} />
     </section>
   );
 }
@@ -1444,7 +1334,7 @@ function WarehouseSection({
 }) {
   const [form, setForm] = useState({
     governorateId: reference.governorates[0]?.id || "",
-    saleDate: today,
+    saleDate: "",
     quantity: "50",
     amount: "",
     note: "",
@@ -1522,6 +1412,24 @@ function WarehouseSection({
     }
   };
 
+  const editRecord = async (record: WarehouseSale) => {
+    const nextDate = window.prompt("تاريخ الحركة (YYYY-MM-DD)", record.saleDate);
+    if (!nextDate) return;
+    const nextQuantity = window.prompt("عدد القطع", String(record.quantity));
+    if (!nextQuantity) return;
+    const nextAmount = window.prompt("المبلغ (اتركه فارغاً إن لم يوجد)", record.amount == null ? "" : String(record.amount));
+    const nextNote = window.prompt("الملاحظة", record.note || "");
+    const quantity = Number(nextQuantity);
+    if (!Number.isInteger(quantity) || quantity <= 0) { showToast("أدخل كمية صحيحة", "error"); return; }
+    const amount = nextAmount ? Number(nextAmount) : null;
+    if (amount !== null && (!Number.isFinite(amount) || amount < 0)) { showToast("أدخل مبلغاً صحيحاً", "error"); return; }
+    try {
+      await api(`/warehouse-sales/${record.id}`, { method: "PATCH", body: JSON.stringify({ saleDate: nextDate, quantity, amount, note: nextNote || "" }) });
+      setWarehouse((prev) => prev.map((item) => item.id === record.id ? { ...item, saleDate: nextDate, quantity, amount, note: nextNote || "" } : item));
+      showToast("تم تعديل حركة المذخر");
+      reload(true);
+    } catch { showToast("تعذر تعديل حركة المذخر", "error"); }
+  };
   const deleteRecord = async (recordId: string, govName: string, pieces: number) => {
     if (!window.confirm(`هل أنت متأكد من حذف حركة المذخر (${number(pieces)} قطعة - ${govName})؟`)) {
       return;
@@ -1681,7 +1589,7 @@ function WarehouseSection({
         </div>
 
         <button className="local-primary" style={{ marginTop: 14 }} disabled={busy}>
-          <Check /> {busy ? "جارٍ الحفظ..." : "حفظ حركة المذخر فوراً (0ms)"}
+          <Check /> {busy ? "جارٍ الحفظ..." : "حفظ حركة المذخر"}
         </button>
       </form>
 
@@ -1777,6 +1685,7 @@ function WarehouseSection({
                       : money(item.amount)}
                   </small>
                 </b>
+                <button type="button" className="local-plain-button" onClick={() => void editRecord(item)}>تعديل</button>
                 <button
                   type="button"
                   onClick={() => void deleteRecord(item.id, item.governorate, item.quantity)}
@@ -1919,6 +1828,15 @@ function TargetsSection({
     }
   };
 
+  const removeTarget = async (record: TargetRecord) => {
+    if (!window.confirm(`حذف هدف ${record.governorate} لهذه الفترة؟`)) return;
+    try {
+      await api(`/targets/${record.id}`, { method: "DELETE" });
+      setTargets((prev) => prev.filter((target) => target.id !== record.id));
+      setValues((prev) => ({ ...prev, [record.governorateId]: { quantity: "", amount: "" } }));
+      showToast("تم حذف الهدف");
+    } catch { showToast("تعذر حذف الهدف", "error"); }
+  };
   const periodPrefix = `${year}-${String(month).padStart(2, "0")}`;
 
   return (
@@ -2054,6 +1972,7 @@ function TargetsSection({
               >
                 {isSaving ? "جارٍ الحفظ..." : "حفظ هدف المحافظة"}
               </button>
+              {existing && <button type="button" className="local-plain-button" onClick={() => void removeTarget(existing)}>حذف الهدف</button>}
             </div>
           );
         })}

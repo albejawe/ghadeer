@@ -23,6 +23,10 @@ import {
 import { applyInvoiceFilters } from "../../shared/invoiceLogic.js";
 import { registerLocalApi } from "../localApi.js";
 import { registerLocalAdminApi } from "../localAdminApi.js";
+import { registerLocalNotificationsApi } from "../localNotificationsApi.js";
+import { registerLocalSalesManagementApi } from "../localSalesManagementApi.js";
+import { registerLocalTargetsManagementApi } from "../localTargetsManagementApi.js";
+import { registerLocalWarehouseManagementApi } from "../localWarehouseManagementApi.js";
 import { registerLocalV2CoreApi } from "../localV2CoreApi.js";
 import { registerLocalV2OperationsApi } from "../localV2OperationsApi.js";
 
@@ -35,6 +39,10 @@ export function buildApp() {
   registerOAuthRoutes(app);
   registerLocalV2CoreApi(app);
   registerLocalV2OperationsApi(app);
+  registerLocalNotificationsApi(app);
+  registerLocalSalesManagementApi(app);
+  registerLocalTargetsManagementApi(app);
+  registerLocalWarehouseManagementApi(app);
   registerLocalApi(app);
   registerLocalAdminApi(app);
   app.get("/api/sync/run", async (req, res) => {
