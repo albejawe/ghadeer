@@ -37,8 +37,14 @@ export function buildApp() {
   registerLocalV2OperationsApi(app);
   registerLocalApi(app);
   registerLocalAdminApi(app);
-  app.get("/api/sync/run", async (_req, res) => {
+  app.get("/api/sync/run", async (req, res) => {
     try {
+      const user = await (await import("../localDb.js")).getRequestUser(req);
+      const token = process.env.GOOGLE_SYNC_TOKEN;
+      const isTokenValid = token && req.query?.token === token;
+      if (!user && !isTokenValid) {
+        return res.status(401).json({ ok: false, error: "UNAUTHORIZED" });
+      }
       const result = await (await import("../sync.js")).runSync();
       const eventId = result.syncToken || `pull-${result.syncedAt}`;
       const summary = await applyFullSnapshot(result.invoices, eventId, "manual-full-sync");
@@ -69,20 +75,39 @@ export function buildApp() {
     try { const link = await getSharedLink(req.params.id); if (!link) return res.status(404).json({ ok: false, error: "LINK_NOT_FOUND" }); const invoices = await listCachedInvoices(); const filters = link.filters as Record<string, string>; res.json({ ok: true, link, invoices: applyInvoiceFilters(invoices as never[], filters) }); }
     catch { res.status(503).json({ ok: false, error: "DATABASE_UNAVAILABLE" }); }
   });
-  app.get("/api/shared-links", async (_req, res) => {
-    try { res.json({ ok: true, links: await listSharedLinks() }); }
+  app.get("/api/shared-links", async (req, res) => {
+    try {
+      const user = await (await import("../localDb.js")).getRequestUser(req);
+      if (!user) return res.status(401).json({ ok: false, error: "UNAUTHORIZED" });
+      res.json({ ok: true, links: await listSharedLinks() });
+    }
     catch { res.status(503).json({ ok: false, error: "DATABASE_UNAVAILABLE" }); }
   });
   app.post("/api/shared-links", async (req, res) => {
-    try { const link = await createSharedLink(req.body?.filters || {}, String(req.body?.name || "رابط تقرير")); res.status(201).json({ ok: true, link }); }
+    try {
+      const user = await (await import("../localDb.js")).getRequestUser(req);
+      if (!user) return res.status(401).json({ ok: false, error: "UNAUTHORIZED" });
+      const link = await createSharedLink(req.body?.filters || {}, String(req.body?.name || "رابط تقرير"));
+      res.status(201).json({ ok: true, link });
+    }
     catch { res.status(503).json({ ok: false, error: "LINK_CREATE_FAILED" }); }
   });
   app.patch("/api/shared-links/:id", async (req, res) => {
-    try { await updateSharedLink(req.params.id, Boolean(req.body?.active)); res.json({ ok: true }); }
+    try {
+      const user = await (await import("../localDb.js")).getRequestUser(req);
+      if (!user) return res.status(401).json({ ok: false, error: "UNAUTHORIZED" });
+      await updateSharedLink(req.params.id, Boolean(req.body?.active));
+      res.json({ ok: true });
+    }
     catch { res.status(503).json({ ok: false, error: "LINK_UPDATE_FAILED" }); }
   });
   app.delete("/api/shared-links/:id", async (req, res) => {
-    try { await removeSharedLink(req.params.id); res.json({ ok: true }); }
+    try {
+      const user = await (await import("../localDb.js")).getRequestUser(req);
+      if (!user) return res.status(401).json({ ok: false, error: "UNAUTHORIZED" });
+      await removeSharedLink(req.params.id);
+      res.json({ ok: true });
+    }
     catch { res.status(503).json({ ok: false, error: "LINK_DELETE_FAILED" }); }
   });
   app.get("/api/invoices", async (_req, res) => {
@@ -90,15 +115,34 @@ export function buildApp() {
     catch { res.status(503).json({ ok: false, error: "DATABASE_UNAVAILABLE" }); }
   });
   app.post("/api/invoices", async (req, res) => {
-    try { const invoice = req.body as import("../sync.js").SheetInvoice; if (!invoice?.id || !invoice.company || !invoice.number) return res.status(400).json({ ok: false, error: "INVALID_INVOICE" }); const saved = await createInvoiceWithSync(invoice); res.status(201).json({ ok: true, invoice: saved }); }
+    try {
+      const user = await (await import("../localDb.js")).getRequestUser(req);
+      if (!user) return res.status(401).json({ ok: false, error: "UNAUTHORIZED" });
+      const invoice = req.body as import("../sync.js").SheetInvoice;
+      if (!invoice?.id || !invoice.company || !invoice.number) return res.status(400).json({ ok: false, error: "INVALID_INVOICE" });
+      const saved = await createInvoiceWithSync(invoice);
+      res.status(201).json({ ok: true, invoice: saved });
+    }
     catch { res.status(502).json({ ok: false, error: "INVOICE_CREATE_FAILED" }); }
   });
   app.patch("/api/invoices/:id", async (req, res) => {
-    try { const invoice = { ...(req.body as import("../sync.js").SheetInvoice), id: req.params.id }; if (!invoice.company || !invoice.number) return res.status(400).json({ ok: false, error: "INVALID_INVOICE" }); const saved = await updateInvoiceWithSync(invoice); res.json({ ok: true, invoice: saved }); }
+    try {
+      const user = await (await import("../localDb.js")).getRequestUser(req);
+      if (!user) return res.status(401).json({ ok: false, error: "UNAUTHORIZED" });
+      const invoice = { ...(req.body as import("../sync.js").SheetInvoice), id: req.params.id };
+      if (!invoice.company || !invoice.number) return res.status(400).json({ ok: false, error: "INVALID_INVOICE" });
+      const saved = await updateInvoiceWithSync(invoice);
+      res.json({ ok: true, invoice: saved });
+    }
     catch { res.status(502).json({ ok: false, error: "INVOICE_UPDATE_FAILED" }); }
   });
   app.delete("/api/invoices/:id", async (req, res) => {
-    try { await deleteInvoiceWithSync(req.params.id); res.json({ ok: true, id: req.params.id }); }
+    try {
+      const user = await (await import("../localDb.js")).getRequestUser(req);
+      if (!user) return res.status(401).json({ ok: false, error: "UNAUTHORIZED" });
+      await deleteInvoiceWithSync(req.params.id);
+      res.json({ ok: true, id: req.params.id });
+    }
     catch { res.status(502).json({ ok: false, error: "INVOICE_DELETE_FAILED" }); }
   });
   // tRPC API

@@ -52,8 +52,8 @@ export function calculateInvoiceStats(records: InvoiceRecord[], today = new Date
 
 export function deriveSheetFields(amount: number, paid: number, createdAt: string) {
   const dueAt = new Date(new Date(createdAt).getTime() + 60 * 86400000).toISOString().slice(0, 10);
-  const remaining = amount - paid;
-  const status = paid >= amount ? "مسدد" : paid > 0 ? "جزئي" : "غير مسدد";
+  const remaining = Math.max(0, amount - paid);
+  const status = paid >= amount && amount > 0 ? "مسدد" : paid > 0 ? "جزئي" : "غير مسدد";
   return { dueAt, remaining, status } as const;
 }
 

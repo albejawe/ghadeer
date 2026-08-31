@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { BarChart3, CalendarDays, Check, FileSpreadsheet, HardDrive, Plus, Sparkles, WalletCards } from "lucide-react";
+import { BarChart3, CalendarDays, Check, FileSpreadsheet, HardDrive, Plus, RefreshCw, Settings2, ShieldCheck, Sparkles, WalletCards } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { Sidebar } from "@/components/dashboard/Sidebar";
 import { Topbar } from "@/components/dashboard/Topbar";
@@ -60,6 +62,11 @@ export default function Home() {
   const [sort, setSort] = useState<SortState>({ key: "createdAt", dir: "desc" });
   const [form, setForm] = useState<InvoiceForm>(emptyForm);
   const [savingInvoice, setSavingInvoice] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [securityOpen, setSecurityOpen] = useState(false);
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [changingPassword, setChangingPassword] = useState(false);
 
   const invoicesRef = useRef<Invoice[]>([]);
   invoicesRef.current = invoices;
@@ -426,8 +433,11 @@ export default function Home() {
   };
 
   useEffect(() => {
-    void loadCachedInvoices();
-    void runSync(true);
+    async function initData() {
+      await loadCachedInvoices();
+      await runSync(true);
+    }
+    void initData();
 
     // Periodic Background Check every 15 minutes
     const interval = window.setInterval(() => {
@@ -453,8 +463,8 @@ export default function Home() {
           setActiveView(view);
           setMobileOpen(false);
         }}
-        onSettings={() => toast.info("إعدادات المزامنة ستظهر بعد ربط Google Apps Script")}
-        onSecurity={() => toast.info("يمكن تغيير كلمة السر من هنا بعد تفعيل المصادقة")}
+        onSettings={() => setSettingsOpen(true)}
+        onSecurity={() => setSecurityOpen(true)}
         badges={{ invoices: invoices.length, links: sharedLinks.length }}
       />
       {mobileOpen && (
@@ -618,6 +628,119 @@ export default function Home() {
         onSave={() => void saveInvoice()}
         saving={savingInvoice}
       />
+
+      {/* Sync Settings Dialog */}
+      <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
+        <DialogContent dir="rtl" className="sm:max-w-[460px]">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-bold flex items-center gap-2">
+              <Settings2 className="text-teal-600 size-5" />
+              إعدادات المزامنة السحابية (Google Sheets)
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 text-sm mt-2">
+            <div className="p-3.5 bg-slate-50 dark:bg-slate-900 rounded-xl border border-border space-y-2.5">
+              <div className="flex justify-between items-center">
+                <span className="text-muted-foreground">حالة السحابة وقاعدة البيانات:</span>
+                <span className="font-bold text-emerald-600">✓ نشط ومتصل (Turso & Sheets)</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-muted-foreground">آخر مزامنة ناجحة:</span>
+                <span className="font-semibold text-foreground">{lastSync || "مباشر"}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-muted-foreground">إجمالي الفواتير بالسجل:</span>
+                <span className="font-bold text-foreground">{invoices.length} فاتورة</span>
+              </div>
+            </div>
+            <Button
+              className="w-full"
+              onClick={() => {
+                void runSync(false);
+                setSettingsOpen(false);
+              }}
+              disabled={syncing}
+            >
+              <RefreshCw className={`ml-2 size-4 ${syncing ? "animate-spin" : ""}`} />
+              {syncing ? "جارٍ تشغيل المزامنة..." : "بدء مزامنة فورية كاملة الآن"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Account Security Dialog */}
+      <Dialog open={securityOpen} onOpenChange={setSecurityOpen}>
+        <DialogContent dir="rtl" className="sm:max-w-[420px]">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-bold flex items-center gap-2">
+              <ShieldCheck className="text-teal-600 size-5" />
+              حماية الحساب وتغيير كلمة المرور
+            </DialogTitle>
+          </DialogHeader>
+          <form
+            onSubmit={async (e) => {
+              e.preventDefault();
+              if (newPassword.length < 6) {
+                toast.error("كلمة المرور يجب أن تكون 6 أحرف على الأقل");
+                return;
+              }
+              if (newPassword !== confirmPassword) {
+                toast.error("كلمتا المرور غير متطابقتين");
+                return;
+              }
+              setChangingPassword(true);
+              try {
+                const meRes = await fetch("/api/local/auth/me", { credentials: "include" });
+                const me = await meRes.json();
+                if (me?.user?.id) {
+                  const res = await fetch(`/api/local/users/${me.user.id}/password`, {
+                    method: "POST",
+                    headers: { "content-type": "application/json" },
+                    credentials: "include",
+                    body: JSON.stringify({ password: newPassword }),
+                  });
+                  if (!res.ok) throw new Error("failed");
+                  toast.success("✓ تم تغيير كلمة المرور بنجاح");
+                  setSecurityOpen(false);
+                  setNewPassword("");
+                  setConfirmPassword("");
+                } else {
+                  toast.error("يرجى تسجيل الدخول لتغيير كلمة المرور");
+                }
+              } catch {
+                toast.error("تعذر تحديث كلمة المرور");
+              } finally {
+                setChangingPassword(false);
+              }
+            }}
+            className="space-y-4 mt-2"
+          >
+            <div className="space-y-1.5">
+              <label className="block text-xs font-bold text-foreground">كلمة المرور الجديدة</label>
+              <Input
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="6 أحرف على الأقل"
+                required
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="block text-xs font-bold text-foreground">تأكيد كلمة المرور</label>
+              <Input
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder="أعد إدخال كلمة المرور"
+                required
+              />
+            </div>
+            <Button type="submit" className="w-full" disabled={changingPassword}>
+              {changingPassword ? "جارٍ التحديث..." : "حفظ كلمة المرور الجديدة"}
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

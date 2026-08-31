@@ -49,9 +49,9 @@ router.post("/warehouse-sales", async (req, res) => {
       return res.status(400).json({ ok: false, error: "INVALID_WAREHOUSE_SALE" });
     }
 
-    const dateObj = new Date(saleDate);
-    const year = dateObj.getFullYear();
-    const month = dateObj.getMonth() + 1;
+    const [yearStr, monthStr] = saleDate.split("-");
+    const year = Number(yearStr);
+    const month = Number(monthStr);
 
     const id = randomUUID();
     const now = new Date().toISOString();
@@ -94,9 +94,9 @@ router.put("/warehouse-sales", async (req, res) => {
       return res.status(400).json({ ok: false, error: "INVALID_WAREHOUSE_SALE" });
     }
 
-    const dateObj = new Date(saleDate);
-    const year = dateObj.getFullYear();
-    const month = dateObj.getMonth() + 1;
+    const [yearStr, monthStr] = saleDate.split("-");
+    const year = Number(yearStr);
+    const month = Number(monthStr);
 
     const id = randomUUID();
     const now = new Date().toISOString();
