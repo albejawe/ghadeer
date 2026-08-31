@@ -2,8 +2,8 @@ import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   BarChart3,
   Check,
-  ChevronDown,
   ClipboardList,
+  KeyRound,
   Layers,
   LogOut,
   Plus,
@@ -14,6 +14,7 @@ import {
   Store,
   Target,
   Trash2,
+  UserCheck,
   UserPlus,
   Users,
   X,
@@ -227,6 +228,7 @@ function SearchableCombobox<T extends { id: string; name: string; extra?: string
               e.preventDefault();
               onChange(filteredItems[0].id);
               setOpen(false);
+              setQuery("");
             }
           }}
         />
@@ -255,7 +257,8 @@ function SearchableCombobox<T extends { id: string; name: string; extra?: string
                 className={`local-combobox-item ${
                   item.id === value ? "selected" : ""
                 }`}
-                onClick={() => {
+                onMouseDown={(e) => {
+                  e.preventDefault();
                   onChange(item.id);
                   setOpen(false);
                   setQuery("");
@@ -559,20 +562,25 @@ function AppShell({
   const govName = reference.governorates.find(
     (item) => item.id === user.governorateId
   )?.name;
+
   const currentSales =
     user.role === "admin"
       ? sales
       : sales.filter((item) => item.governorateId === user.governorateId);
-  const totalUnits = currentSales.reduce((sum, item) => sum + item.quantity, 0);
-  const totalAmount = currentSales.reduce(
-    (sum, item) => sum + item.totalAmount,
-    0
+
+  // Filter current month sales for accurate monthly alignment with monthly warehouse sales
+  const currentYear = new Date().getFullYear();
+  const currentMonthStr = String(new Date().getMonth() + 1).padStart(2, "0");
+  const currentMonthPrefix = `${currentYear}-${currentMonthStr}`;
+
+  const monthlySales = currentSales.filter((item) =>
+    item.saleDate.startsWith(currentMonthPrefix)
   );
-  const warehouseUnits = warehouse.reduce(
-    (sum, item) => sum + item.quantity,
-    0
-  );
-  const netWarehouseUnits = warehouseUnits - totalUnits;
+
+  const monthlyUnits = monthlySales.reduce((sum, item) => sum + item.quantity, 0);
+  const monthlyAmount = monthlySales.reduce((sum, item) => sum + item.totalAmount, 0);
+  const warehouseUnits = warehouse.reduce((sum, item) => sum + item.quantity, 0);
+  const netWarehouseUnits = warehouseUnits - monthlyUnits;
 
   return (
     <main className="local-app">
@@ -610,24 +618,24 @@ function AppShell({
 
       <section className="local-summary">
         <div>
-          <span>قطع المندوبين</span>
-          <strong>{number(totalUnits)}</strong>
+          <span>قطع المندوبين (الشهر الحالي)</span>
+          <strong>{number(monthlyUnits)}</strong>
         </div>
         <div>
-          <span>مبالغ المندوبين</span>
-          <strong>{money(totalAmount)}</strong>
+          <span>مبالغ المندوبين (الشهر الحالي)</span>
+          <strong>{money(monthlyAmount)}</strong>
         </div>
         <div>
-          <span>{user.role === "admin" ? "صافي المذخر" : "العمليات"}</span>
+          <span>{user.role === "admin" ? "صافي المذخر الشهري" : "العمليات (الشهر الحالي)"}</span>
           <strong>
             {user.role === "admin"
               ? number(netWarehouseUnits)
-              : number(currentSales.length)}
+              : number(monthlySales.length)}
           </strong>
         </div>
         {user.role === "admin" && (
           <div>
-            <span>إجمالي المذخر</span>
+            <span>إجمالي المذخر الشهري</span>
             <strong>{number(warehouseUnits)}</strong>
           </div>
         )}
@@ -720,10 +728,9 @@ function SalesSection({
   showToast: (text: string, type?: "success" | "error" | "info") => void;
   reload: (silent?: boolean) => void;
 }) {
-  // Mode: single item vs multi-item batch
   const [entryMode, setEntryMode] = useState<"single" | "batch">("single");
 
-  // Common Header State
+  // Header State
   const [governorateId, setGovernorateId] = useState(
     user.governorateId || reference.governorates[0]?.id || ""
   );
@@ -737,14 +744,14 @@ function SalesSection({
   const [materialId, setMaterialId] = useState("");
   const [quantity, setQuantity] = useState<string>("10");
   const [note, setNote] = useState("");
-  const [busy, setBusy] = useState(false);
 
   // Multi-Item Batch State
   const [batchItems, setBatchItems] = useState<BatchItem[]>([
     { id: "1", materialId: "", quantity: 10 },
   ]);
+  const [batchBusy, setBatchBusy] = useState(false);
 
-  // Search in sales history
+  // History Search
   const [historySearch, setHistorySearch] = useState("");
 
   const reps = useMemo(
@@ -767,7 +774,6 @@ function SalesSection({
 
   const singleTotal = (Number(quantity) || 0) * (chosenMaterial?.unitPrice || 0);
 
-  // Auto pick representative if only 1 exists
   useEffect(() => {
     if (reps.length === 1) {
       setRepresentativeId(reps[0].id);
@@ -776,7 +782,6 @@ function SalesSection({
     }
   }, [governorateId, reps]);
 
-  // Add preset quantity helper
   const addPreset = (val: number) => {
     setQuantity((prev) => {
       const current = Number(prev) || 0;
@@ -792,7 +797,7 @@ function SalesSection({
       return;
     }
     const qty = Number(quantity);
-    if (!qty || qty <= 0) {
+    if (!Number.isInteger(qty) || qty <= 0) {
       showToast("يرجى إدخال كمية صحيحة أكبر من صفر", "error");
       return;
     }
@@ -801,7 +806,6 @@ function SalesSection({
     const currentGov = reference.governorates.find((g) => g.id === governorateId);
     const currentComp = reference.companies.find((c) => c.id === companyId);
 
-    // Create optimistic sale object
     const optimisticSale: Sale = {
       id: `opt-${Date.now()}`,
       saleDate,
@@ -818,16 +822,13 @@ function SalesSection({
       material: chosenMaterial.name,
     };
 
-    // 0ms Latency UI update
     setSales((prev) => [optimisticSale, ...prev]);
     showToast(`✓ تم حفظ ${qty} قطعة (${money(singleTotal)}) بنجاح`);
 
-    // Reset material for next rapid entry
     setMaterialId("");
     setQuantity("10");
     setNote("");
 
-    // Send API in background
     try {
       await api("/sales", {
         method: "POST",
@@ -845,13 +846,12 @@ function SalesSection({
       });
       reload(true);
     } catch (err) {
-      // Revert if failed
       setSales((prev) => prev.filter((s) => s.id !== optimisticSale.id));
       showToast(err instanceof Error ? err.message : "فشل حفظ البيع", "error");
     }
   };
 
-  // Submit Multi-Item Batch (Optimistic)
+  // Submit Multi-Item Batch (Optimistic & Atomic Endpoint)
   const submitBatch = async (event: FormEvent) => {
     event.preventDefault();
     if (!representativeId) {
@@ -859,19 +859,18 @@ function SalesSection({
       return;
     }
     const validItems = batchItems.filter(
-      (item) => item.materialId && item.quantity > 0
+      (item) => item.materialId && Number.isInteger(Number(item.quantity)) && Number(item.quantity) > 0
     );
     if (!validItems.length) {
       showToast("يرجى اختيار مادة واحدة على الأقل وكمية صحيحة", "error");
       return;
     }
 
-    setBusy(true);
+    setBatchBusy(true);
     const currentRep = reps.find((r) => r.id === representativeId);
     const currentGov = reference.governorates.find((g) => g.id === governorateId);
     const currentComp = reference.companies.find((c) => c.id === companyId);
 
-    // Optimistic batch sales
     const optimisticList: Sale[] = validItems.map((item, idx) => {
       const mat = reference.materials.find((m) => m.id === item.materialId);
       const unitP = mat?.unitPrice || 0;
@@ -900,31 +899,23 @@ function SalesSection({
       `✓ تم تسجيل ${validItems.length} مواد (${number(batchTotalPieces)} قطعة - ${money(batchTotalAmount)})`
     );
 
-    // Reset batch rows
     setBatchItems([{ id: Date.now().toString(), materialId: "", quantity: 10 }]);
 
     try {
-      // Execute all sales in parallel
-      await Promise.all(
-        validItems.map((item) => {
-          const mat = reference.materials.find((m) => m.id === item.materialId);
-          const unitPrice = mat?.unitPrice || 0;
-          return api("/sales", {
-            method: "POST",
-            body: JSON.stringify({
-              governorateId,
-              representativeId,
-              companyId,
-              materialId: item.materialId,
-              quantity: item.quantity,
-              unitPrice,
-              totalAmount: item.quantity * unitPrice,
-              saleDate,
-              note: "إدخال متعدد",
-            }),
-          });
-        })
-      );
+      await api("/sales/batch", {
+        method: "POST",
+        body: JSON.stringify({
+          governorateId,
+          representativeId,
+          companyId,
+          saleDate,
+          items: validItems.map((item) => ({
+            materialId: item.materialId,
+            quantity: item.quantity,
+            note: "إدخال متعدد",
+          })),
+        }),
+      });
       reload(true);
     } catch (err) {
       setSales((prev) =>
@@ -932,11 +923,10 @@ function SalesSection({
       );
       showToast(err instanceof Error ? err.message : "تعذر حفظ الإدخال المتعدد", "error");
     } finally {
-      setBusy(false);
+      setBatchBusy(false);
     }
   };
 
-  // Filtered sales in real-time
   const filteredSales = useMemo(() => {
     if (!historySearch.trim()) return sales;
     const lower = historySearch.toLowerCase().trim();
@@ -960,7 +950,6 @@ function SalesSection({
         <BarChart3 />
       </div>
 
-      {/* Mode Switcher */}
       <div className="local-mode-toggle">
         <button
           type="button"
@@ -980,11 +969,9 @@ function SalesSection({
         </button>
       </div>
 
-      {/* ================= SINGLE ITEM FORM ================= */}
       {entryMode === "single" ? (
         <form className="local-form-card" onSubmit={submitSingle}>
           <div className="local-form-grid">
-            {/* المحافظة */}
             <Field label="المحافظة">
               <select
                 value={governorateId}
@@ -999,7 +986,6 @@ function SalesSection({
               </select>
             </Field>
 
-            {/* المندوب */}
             <SearchableCombobox
               label="المندوب"
               items={reps.map((r) => ({ id: r.id, name: r.name }))}
@@ -1009,7 +995,6 @@ function SalesSection({
               required
             />
 
-            {/* الشركة */}
             <Field label="الشركة">
               <select
                 value={companyId}
@@ -1027,7 +1012,6 @@ function SalesSection({
               </select>
             </Field>
 
-            {/* المادة (Searchable Combobox) */}
             <SearchableCombobox
               label="المادة الدوائية"
               items={materials}
@@ -1037,12 +1021,12 @@ function SalesSection({
               required
             />
 
-            {/* الكمية مع Presets */}
             <div className="local-field">
               <span>عدد القطع</span>
               <input
                 type="number"
                 min="1"
+                step="1"
                 value={quantity}
                 onChange={(e) => setQuantity(e.target.value)}
                 placeholder="10"
@@ -1072,7 +1056,6 @@ function SalesSection({
               </div>
             </div>
 
-            {/* تاريخ البيع */}
             <Field label="تاريخ البيع">
               <input
                 type="date"
@@ -1095,7 +1078,6 @@ function SalesSection({
           </button>
         </form>
       ) : (
-        /* ================= MULTI-ITEM BATCH FORM ================= */
         <form className="local-form-card" onSubmit={submitBatch}>
           <div className="local-form-grid">
             <Field label="المحافظة">
@@ -1175,6 +1157,7 @@ function SalesSection({
                     <input
                       type="number"
                       min="1"
+                      step="1"
                       value={item.quantity || ""}
                       onChange={(e) => {
                         const val = Number(e.target.value);
@@ -1249,14 +1232,13 @@ function SalesSection({
           <button
             className="local-primary"
             style={{ marginTop: 18, width: "100%" }}
-            disabled={busy}
+            disabled={batchBusy}
           >
-            {busy ? "جارٍ الحفظ..." : <><Check /> حفظ جميع المواد دفعة واحدة</>}
+            {batchBusy ? "جارٍ الحفظ الذري..." : <><Check /> حفظ جميع المواد دفعة واحدة</>}
           </button>
         </form>
       )}
 
-      {/* ================= RECENT SALES LIST ================= */}
       <div className="local-section-head compact">
         <div>
           <h2>آخر الإدخالات ({filteredSales.length})</h2>
@@ -1533,7 +1515,6 @@ function TargetsSection({
     const qty = Number(value.quantity || 0);
     const amt = value.amount ? Number(value.amount) : null;
 
-    // Optimistic Update
     setTargets((prev) => {
       const filtered = prev.filter(
         (t) =>
@@ -1671,7 +1652,7 @@ function TargetsSection({
 }
 
 // =========================================================================
-// PEOPLE SECTION (Search, Filter Tabs, Optimistic Add & Delete)
+// PEOPLE SECTION (Supervisors & Delegates with Full Management & Password Reset)
 // =========================================================================
 
 function PeopleSection({
@@ -1697,11 +1678,26 @@ function PeopleSection({
     companyIds: reference.companies.map((item) => item.id),
   });
 
+  const [usersList, setUsersList] = useState<User[]>([]);
   const [filterGovId, setFilterGovId] = useState<string>("all");
   const [repSearch, setRepSearch] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  // Optimistic Add Representative
+  // Fetch users on load
+  const loadUsers = async () => {
+    try {
+      const res = await api<{ users: User[] }>("/users");
+      setUsersList(res.users || []);
+    } catch {
+      // Ignored if non-admin
+    }
+  };
+
+  useEffect(() => {
+    void loadUsers();
+  }, []);
+
+  // Add Representative (Optimistic)
   const addRep = async (e: FormEvent) => {
     e.preventDefault();
     if (!form.name.trim()) return;
@@ -1727,10 +1723,22 @@ function PeopleSection({
     setForm({ ...form, name: "" });
 
     try {
-      await api("/representatives", {
+      const res = await api<{ id: string }>("/representatives", {
         method: "POST",
         body: JSON.stringify({ name: newName, governorateId: form.governorateId }),
       });
+      if (res?.id) {
+        setReference((prev) =>
+          prev
+            ? {
+                ...prev,
+                representatives: prev.representatives.map((r) =>
+                  r.id === tempId ? { ...r, id: res.id } : r
+                ),
+              }
+            : null
+        );
+      }
       reload(true);
     } catch (err) {
       setReference((prev) =>
@@ -1745,7 +1753,7 @@ function PeopleSection({
     }
   };
 
-  // Optimistic Delete Representative
+  // Delete Representative (Optimistic)
   const deleteRep = async (repId: string, repName: string) => {
     if (!window.confirm(`هل أنت متأكد من حذف المندوب "${repName}"؟`)) {
       return;
@@ -1754,7 +1762,6 @@ function PeopleSection({
 
     const deletedRep = reference.representatives.find((r) => r.id === repId);
 
-    // Optimistically remove from list immediately (0ms)
     setReference((prev) =>
       prev
         ? {
@@ -1772,7 +1779,6 @@ function PeopleSection({
       });
       reload(true);
     } catch (err) {
-      // Revert if failed
       if (deletedRep) {
         setReference((prev) =>
           prev
@@ -1804,13 +1810,32 @@ function PeopleSection({
         username: "",
         password: "",
       });
+      void loadUsers();
       reload(true);
     } catch (err) {
       showToast(err instanceof Error ? err.message : "تعذر إنشاء المشرف", "error");
     }
   };
 
-  // Live filter representatives
+  // Reset Supervisor Password
+  const resetPassword = async (userId: string, userName: string) => {
+    const newPass = window.prompt(`أدخل كلمة المرور الجديدة للمشرف (${userName}) - 6 أحرف كحد أدنى:`);
+    if (!newPass) return;
+    if (newPass.length < 6) {
+      showToast("كلمة المرور يجب أن تكون 6 أحرف على الأقل", "error");
+      return;
+    }
+    try {
+      await api(`/users/${userId}/password`, {
+        method: "POST",
+        body: JSON.stringify({ password: newPass }),
+      });
+      showToast(`✓ تم تحديث كلمة المرور لـ "${userName}" بنجاح`);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "تعذر تحديث كلمة المرور", "error");
+    }
+  };
+
   const displayedReps = useMemo(() => {
     return reference.representatives.filter((item) => {
       const matchGov = filterGovId === "all" || item.governorateId === filterGovId;
@@ -1950,6 +1975,57 @@ function PeopleSection({
           </button>
         </form>
       </div>
+
+      {/* قائمة المشرفين المسجلين */}
+      {usersList.length > 0 && (
+        <>
+          <div className="local-section-head compact">
+            <div>
+              <h2>المشرفون وحسابات الدخول ({usersList.length})</h2>
+              <p>إدارة حسابات الدخول وتغيير كلمات المرور.</p>
+            </div>
+            <UserCheck size={20} />
+          </div>
+
+          <div className="local-list">
+            {usersList.map((u) => {
+              const uGov = reference.governorates.find((g) => g.id === u.governorateId);
+              return (
+                <div className="local-list-row" key={u.id}>
+                  <div>
+                    <strong>{u.displayName} (@{u.username})</strong>
+                    <span>
+                      الدور: {u.role === "admin" ? "مدير النظام (Admin)" : `مشرف (${uGov?.name || "عام"})`}
+                    </span>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <button
+                      type="button"
+                      onClick={() => void resetPassword(u.id, u.displayName)}
+                      style={{
+                        background: "#e7f4f0",
+                        color: "#087f6a",
+                        border: "1px solid #cce8e0",
+                        borderRadius: 8,
+                        padding: "6px 12px",
+                        cursor: "pointer",
+                        fontSize: 11,
+                        fontWeight: 800,
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 5,
+                      }}
+                    >
+                      <KeyRound size={13} />
+                      <span>تغيير كلمة المرور</span>
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
 
       {/* قائمة المندوبين مع الفلترة السريعة */}
       <div className="local-section-head compact">

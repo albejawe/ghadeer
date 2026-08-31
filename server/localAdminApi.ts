@@ -26,8 +26,8 @@ router.get("/warehouse-sales", async (req, res) => {
 
 router.put("/warehouse-sales", async (req, res) => {
   try {
-    const user = await signedIn(req, res); if (!user) return;
-    const body = req.body || {}; const governorateId = user.role === "admin" ? String(body.governorateId || "") : user.governorateId;
+    const user = await signedIn(req, res, true); if (!user) return;
+    const body = req.body || {}; const governorateId = String(body.governorateId || "");
     const year = Number(body.year); const month = Number(body.month); const quantity = Number(body.quantity); const amount = body.amount === "" || body.amount == null ? null : Number(body.amount);
     if (!governorateId || !Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12 || !Number.isInteger(quantity) || quantity < 0 || (amount !== null && (!Number.isFinite(amount) || amount < 0))) return res.status(400).json({ ok: false, error: "INVALID_WAREHOUSE_SALE" });
     const now = new Date().toISOString(); await getTursoClient().execute({ sql: "INSERT INTO warehouse_monthly_sales (id, governorate_id, year, month, quantity, amount, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(governorate_id, year, month) DO UPDATE SET quantity=excluded.quantity, amount=excluded.amount, created_by=excluded.created_by, updated_at=excluded.updated_at", args: [randomUUID(), governorateId, year, month, quantity, amount, user.id, now, now] });
@@ -61,7 +61,17 @@ router.post("/representatives", async (req, res) => {
   try {
     const user = await signedIn(req, res, true); if (!user) return;
     const name = String(req.body?.name || "").trim(); const governorateId = String(req.body?.governorateId || ""); if (!name || !governorateId) return res.status(400).json({ ok: false, error: "INVALID_REPRESENTATIVE" });
-    const id = randomUUID(); const now = new Date().toISOString(); await getTursoClient().execute({ sql: "INSERT INTO representatives (id, name, governorate_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?)", args: [id, name, governorateId, now, now] }); return res.status(201).json({ ok: true, id });
+    const id = randomUUID(); const now = new Date().toISOString();
+    await getTursoClient().execute({
+      sql: "INSERT INTO representatives (id, name, governorate_id, active, created_at, updated_at) VALUES (?, ?, ?, 1, ?, ?) ON CONFLICT(name, governorate_id) DO UPDATE SET active = 1, updated_at = excluded.updated_at",
+      args: [id, name, governorateId, now, now]
+    });
+    const result = await getTursoClient().execute({
+      sql: "SELECT id FROM representatives WHERE name = ? AND governorate_id = ? LIMIT 1",
+      args: [name, governorateId]
+    });
+    const finalId = String(result.rows[0]?.id || id);
+    return res.status(201).json({ ok: true, id: finalId });
   } catch { return res.status(400).json({ ok: false, error: "REPRESENTATIVE_CREATE_FAILED" }); }
 });
 
