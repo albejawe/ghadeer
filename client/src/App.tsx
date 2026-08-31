@@ -4,7 +4,7 @@ import NotFound from "@/pages/NotFound";
 import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
-import Delegates from "./pages/DelegatesV2";
+import Delegates from "./pages/Delegates";
 import Home from "./pages/Home";
 import Launcher from "./pages/Launcher";
 import SharedLink from "./pages/SharedLink";

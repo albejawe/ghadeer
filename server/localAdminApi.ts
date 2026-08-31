@@ -170,6 +170,19 @@ router.post("/representatives", async (req, res) => {
       args: [name, governorateId]
     });
     const finalId = String(result.rows[0]?.id || id);
+
+    // Auto-link to all active companies to ensure 100% compatibility across all modules
+    const allComps = await getTursoClient().execute("SELECT id FROM companies WHERE active = 1");
+    if (allComps.rows.length) {
+      await getTursoClient().batch(
+        allComps.rows.map((c) => ({
+          sql: "INSERT OR IGNORE INTO representative_companies (representative_id, company_id) VALUES (?, ?)",
+          args: [finalId, String(c.id)],
+        })),
+        "write"
+      );
+    }
+
     return res.status(201).json({ ok: true, id: finalId });
   } catch { return res.status(400).json({ ok: false, error: "REPRESENTATIVE_CREATE_FAILED" }); }
 });
