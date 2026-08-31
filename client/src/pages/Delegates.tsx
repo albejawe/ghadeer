@@ -63,10 +63,12 @@ type WarehouseSale = {
   id: string;
   governorateId: string;
   governorate: string;
+  saleDate: string;
   year: number;
   month: number;
   quantity: number;
   amount: number | null;
+  note?: string;
   createdByName: string;
 };
 type TargetRecord = {
@@ -455,9 +457,7 @@ export default function Delegates() {
       const [ref, saleData, warehouseData, targetData] = await Promise.all([
         api<Reference>("/reference"),
         api<{ sales: Sale[] }>("/sales"),
-        api<{ sales: WarehouseSale[] }>(
-          `/warehouse-sales?year=${currentYear}&month=${currentMonth}`
-        ),
+        api<{ sales: WarehouseSale[] }>("/warehouse-sales"),
         api<{ targets: TargetRecord[] }>(
           `/targets?year=${currentYear}&month=${currentMonth}`
         ),
@@ -579,7 +579,13 @@ function AppShell({
 
   const monthlyUnits = monthlySales.reduce((sum, item) => sum + item.quantity, 0);
   const monthlyAmount = monthlySales.reduce((sum, item) => sum + item.totalAmount, 0);
-  const warehouseUnits = warehouse.reduce((sum, item) => sum + item.quantity, 0);
+
+  const monthlyWarehouseRecords = warehouse.filter((w) =>
+    w.saleDate
+      ? w.saleDate.startsWith(currentMonthPrefix)
+      : w.year === currentYear && w.month === Number(currentMonthStr)
+  );
+  const warehouseUnits = monthlyWarehouseRecords.reduce((sum, item) => sum + item.quantity, 0);
   const netWarehouseUnits = warehouseUnits - monthlyUnits;
 
   return (
@@ -1335,68 +1341,137 @@ function WarehouseSection({
 }) {
   const [form, setForm] = useState({
     governorateId: reference.governorates[0]?.id || "",
-    year: String(new Date().getFullYear()),
-    month: String(new Date().getMonth() + 1),
-    quantity: "",
+    saleDate: today,
+    quantity: "50",
     amount: "",
+    note: "",
   });
   const [busy, setBusy] = useState(false);
+  const [search, setSearch] = useState("");
+  const [filterGov, setFilterGov] = useState("all");
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const addPreset = (val: number) => {
+    setForm((prev) => {
+      const cur = Number(prev.quantity) || 0;
+      return { ...prev, quantity: String(cur + val) };
+    });
+  };
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     const qty = Number(form.quantity);
+    if (!Number.isInteger(qty) || qty <= 0) {
+      showToast("يرجى إدخال عدد قطع صحيح أكبر من صفر", "error");
+      return;
+    }
     const amt = form.amount ? Number(form.amount) : null;
     const gov = reference.governorates.find((g) => g.id === form.governorateId);
+    const dateObj = new Date(form.saleDate);
+    const year = dateObj.getFullYear();
+    const month = dateObj.getMonth() + 1;
 
+    const tempId = `opt-wh-${Date.now()}`;
     const optimisticRecord: WarehouseSale = {
-      id: `opt-wh-${Date.now()}`,
+      id: tempId,
       governorateId: form.governorateId,
       governorate: gov?.name || "",
-      year: Number(form.year),
-      month: Number(form.month),
+      saleDate: form.saleDate,
+      year,
+      month,
       quantity: qty,
       amount: amt,
+      note: form.note,
       createdByName: reference.user.displayName,
     };
 
-    setWarehouse((prev) => {
-      const filtered = prev.filter(
-        (r) =>
-          !(
-            r.governorateId === form.governorateId &&
-            r.year === Number(form.year) &&
-            r.month === Number(form.month)
-          )
-      );
-      return [optimisticRecord, ...filtered];
-    });
+    // Instant optimistic insertion - add to the top of the list
+    setWarehouse((prev) => [optimisticRecord, ...prev]);
+    showToast(`✓ تم تسجيل خروج ${number(qty)} قطعة لمذخر ${gov?.name || ""}`);
 
-    showToast(`✓ تم حفظ مبيعات مذخر محافظة ${gov?.name || ""}`);
+    // Reset quantity and note for next entry, preserve governorate and date
+    setForm((prev) => ({ ...prev, quantity: "50", amount: "", note: "" }));
+    setBusy(true);
 
     try {
-      await api("/warehouse-sales", {
-        method: "PUT",
+      const res = await api<{ id: string }>("/warehouse-sales", {
+        method: "POST",
         body: JSON.stringify({
-          ...form,
-          year: Number(form.year),
-          month: Number(form.month),
+          governorateId: form.governorateId,
+          saleDate: form.saleDate,
           quantity: qty,
-          amount: form.amount,
+          amount: amt,
+          note: form.note,
         }),
       });
+
+      if (res?.id) {
+        setWarehouse((prev) =>
+          prev.map((r) => (r.id === tempId ? { ...r, id: res.id } : r))
+        );
+      }
       reload(true);
     } catch (cause) {
-      showToast(cause instanceof Error ? cause.message : "تعذر الحفظ", "error");
+      setWarehouse((prev) => prev.filter((r) => r.id !== tempId));
+      showToast(cause instanceof Error ? cause.message : "تعذر حفظ خروج البضاعة", "error");
+    } finally {
+      setBusy(false);
     }
   };
+
+  const deleteRecord = async (recordId: string, govName: string, pieces: number) => {
+    if (!window.confirm(`هل أنت متأكد من حذف حركة المذخر (${number(pieces)} قطعة - ${govName})؟`)) {
+      return;
+    }
+    setDeletingId(recordId);
+    const backup = records.find((r) => r.id === recordId);
+
+    setWarehouse((prev) => prev.filter((r) => r.id !== recordId));
+    showToast(`✓ تم حذف حركة المذخر بنجاح`);
+
+    try {
+      await api(`/warehouse-sales/${recordId}`, {
+        method: "DELETE",
+      });
+      reload(true);
+    } catch (err) {
+      if (backup) {
+        setWarehouse((prev) => [backup, ...prev]);
+      }
+      showToast(err instanceof Error ? err.message : "تعذر حذف الحركة", "error");
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const displayedRecords = useMemo(() => {
+    return records.filter((r) => {
+      const matchGov = filterGov === "all" || r.governorateId === filterGov;
+      const matchSearch =
+        !search.trim() ||
+        r.governorate.toLowerCase().includes(search.toLowerCase().trim()) ||
+        (r.saleDate && r.saleDate.includes(search.trim())) ||
+        (r.note && r.note.toLowerCase().includes(search.toLowerCase().trim()));
+      return matchGov && matchSearch;
+    });
+  }, [records, filterGov, search]);
+
+  const totalFilteredQuantity = useMemo(
+    () => displayedRecords.reduce((sum, r) => sum + r.quantity, 0),
+    [displayedRecords]
+  );
+  const totalFilteredAmount = useMemo(
+    () => displayedRecords.reduce((sum, r) => sum + (r.amount || 0), 0),
+    [displayedRecords]
+  );
 
   return (
     <section className="local-content">
       <div className="local-section-head">
         <div>
-          <span className="local-kicker">المبيعات الخارجة من المحافظة</span>
-          <h2>مبيعات المذخر الشهرية</h2>
-          <p>عدد القطع إجباري، والمبلغ اختياري مع تحديث فوري.</p>
+          <span className="local-kicker">تسجيل خروج البضاعة</span>
+          <h2>مبيعات المذاخر والشحنات</h2>
+          <p>تسجيل حركات متعددة وتواريخ محددة لكل محافظة مع التحديث اللحظي.</p>
         </div>
         <Store />
       </div>
@@ -1409,6 +1484,7 @@ function WarehouseSection({
               onChange={(e) =>
                 setForm({ ...form, governorateId: e.target.value })
               }
+              required
             >
               {reference.governorates.map((item) => (
                 <option key={item.id} value={item.id}>
@@ -1417,68 +1493,196 @@ function WarehouseSection({
               ))}
             </select>
           </Field>
-          <Field label="السنة">
+
+          <Field label="تاريخ خروج البضاعة">
             <input
-              type="number"
-              value={form.year}
-              onChange={(e) => setForm({ ...form, year: e.target.value })}
+              type="date"
+              value={form.saleDate}
+              onChange={(e) => setForm({ ...form, saleDate: e.target.value })}
+              required
             />
           </Field>
-          <Field label="الشهر">
+
+          <div className="local-field">
+            <span>عدد القطع الخارجة من المذخر <strong style={{ color: "#bd4545" }}>*</strong></span>
             <input
               type="number"
               min="1"
-              max="12"
-              value={form.month}
-              onChange={(e) => setForm({ ...form, month: e.target.value })}
-            />
-          </Field>
-          <Field label="إجمالي القطع">
-            <input
-              type="number"
-              min="0"
+              step="1"
               value={form.quantity}
               onChange={(e) =>
                 setForm({ ...form, quantity: e.target.value })
               }
+              placeholder="50"
               required
             />
-          </Field>
-          <Field label="المبلغ (اختياري)">
+            <div className="local-presets">
+              <span style={{ fontSize: 10, color: "#667a75", marginLeft: 4 }}>
+                سريع:
+              </span>
+              {[10, 50, 100, 250, 500, 1000].map((val) => (
+                <button
+                  key={val}
+                  type="button"
+                  className="local-preset-chip"
+                  onClick={() => addPreset(val)}
+                >
+                  +{val}
+                </button>
+              ))}
+              <button
+                type="button"
+                className="local-preset-chip clear"
+                onClick={() => setForm({ ...form, quantity: "" })}
+              >
+                تفريغ
+              </button>
+            </div>
+          </div>
+
+          <Field label="المبلغ المالي (اختياري)">
             <input
               type="number"
               min="0"
+              placeholder="القيمة بالدينار العراقي (اختياري)"
               value={form.amount}
               onChange={(e) => setForm({ ...form, amount: e.target.value })}
+            />
+          </Field>
+
+          <Field label="ملاحظة أو رقم الوجبة (اختياري)">
+            <input
+              type="text"
+              placeholder="مثال: تجهيز شحنة رقم 1"
+              value={form.note}
+              onChange={(e) => setForm({ ...form, note: e.target.value })}
             />
           </Field>
         </div>
 
         <button className="local-primary" style={{ marginTop: 14 }} disabled={busy}>
-          <Check /> حفظ مبيعات المذخر
+          <Check /> {busy ? "جارٍ الحفظ..." : "حفظ حركة المذخر فوراً (0ms)"}
         </button>
       </form>
 
-      <div className="local-list" style={{ marginTop: 16 }}>
-        {records.map((item) => (
-          <div className="local-list-row" key={item.id}>
-            <div>
-              <strong>{item.governorate}</strong>
-              <span>
-                {item.month}/{item.year} · أدخلها {item.createdByName}
-              </span>
-            </div>
-            <b>
-              {number(item.quantity)} قطعة
-              <br />
-              <small>
-                {item.amount == null
-                  ? "المبلغ غير مسجل"
-                  : money(item.amount)}
-              </small>
-            </b>
+      {/* شريط البحث وتصفية حركات المذاخر */}
+      <div className="local-section-head compact" style={{ marginTop: 24 }}>
+        <div>
+          <h2>سجل حركات المذاخر ({displayedRecords.length})</h2>
+          <p>
+            مجموع القطع: <strong>{number(totalFilteredQuantity)}</strong>
+            {totalFilteredAmount > 0 && (
+              <> · بمبلغ: <strong>{money(totalFilteredAmount)}</strong></>
+            )}
+          </p>
+        </div>
+
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <div style={{ position: "relative", width: 180 }}>
+            <input
+              type="text"
+              placeholder="بحث في الحركات..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              style={{
+                width: "100%",
+                height: 36,
+                padding: "0 28px 0 8px",
+                borderRadius: 10,
+                border: "1px solid #dfe8e5",
+                background: "#fff",
+                fontSize: 11,
+                fontWeight: 700,
+              }}
+            />
+            <Search
+              size={13}
+              style={{
+                position: "absolute",
+                right: 9,
+                top: "50%",
+                transform: "translateY(-50%)",
+                color: "#94a3b8",
+              }}
+            />
           </div>
-        ))}
+
+          <select
+            value={filterGov}
+            onChange={(e) => setFilterGov(e.target.value)}
+            style={{
+              height: 36,
+              padding: "0 10px",
+              borderRadius: 10,
+              border: "1px solid #dfe8e5",
+              background: "#fff",
+              fontSize: 11,
+              fontWeight: 800,
+              cursor: "pointer",
+            }}
+          >
+            <option value="all">جميع المحافظات ({records.length})</option>
+            {reference.governorates.map((gov) => {
+              const count = records.filter((r) => r.governorateId === gov.id).length;
+              return (
+                <option key={gov.id} value={gov.id}>
+                  {gov.name} ({count})
+                </option>
+              );
+            })}
+          </select>
+        </div>
+      </div>
+
+      <div className="local-list">
+        {displayedRecords.map((item) => {
+          const isDeleting = deletingId === item.id;
+          return (
+            <div className="local-list-row" key={item.id}>
+              <div>
+                <strong>{item.governorate}</strong>
+                <span>
+                  {item.saleDate || `${item.month}/${item.year}`}
+                  {item.note ? ` · ${item.note}` : ""}
+                  {` · سجلها: ${item.createdByName || "الأدمن"}`}
+                </span>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                <b style={{ textAlign: "left" }}>
+                  {number(item.quantity)} قطعة
+                  <br />
+                  <small>
+                    {item.amount == null
+                      ? "المبلغ غير مسجل"
+                      : money(item.amount)}
+                  </small>
+                </b>
+                <button
+                  type="button"
+                  onClick={() => void deleteRecord(item.id, item.governorate, item.quantity)}
+                  disabled={isDeleting}
+                  title="حذف الحركة"
+                  style={{
+                    background: "#fee2e2",
+                    color: "#dc2626",
+                    border: "1px solid #fecaca",
+                    borderRadius: 8,
+                    padding: "6px 10px",
+                    cursor: "pointer",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 4,
+                  }}
+                >
+                  <Trash2 size={13} />
+                </button>
+              </div>
+            </div>
+          );
+        })}
+        {!displayedRecords.length && (
+          <div className="local-empty">لا توجد حركات مذخر مسجلة لهذا التحديد.</div>
+        )}
       </div>
     </section>
   );
