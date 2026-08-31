@@ -40,6 +40,8 @@ export async function ensureLocalSchema() {
   schemaPromise = getTursoClient().batch([
     { sql: "CREATE TABLE IF NOT EXISTS sessions (token_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL, expires_at TEXT NOT NULL, created_at TEXT NOT NULL, FOREIGN KEY(user_id) REFERENCES app_users(id) ON DELETE CASCADE)", args: [] },
     { sql: "CREATE INDEX IF NOT EXISTS sessions_expiry_idx ON sessions(expires_at)", args: [] },
+    { sql: "CREATE INDEX IF NOT EXISTS idx_warehouse_sale_date ON warehouse_monthly_sales(sale_date)", args: [] },
+    { sql: "CREATE INDEX IF NOT EXISTS idx_warehouse_gov_period ON warehouse_monthly_sales(governorate_id, year, month)", args: [] },
   ], "write").then(() => undefined);
   return schemaPromise;
 }
@@ -101,7 +103,19 @@ export async function createUser(input: { username: string; displayName: string;
 }
 
 export async function resetUserPassword(id: string, password: string) {
-  await getTursoClient().execute({ sql: "UPDATE app_users SET password_hash = ?, updated_at = ? WHERE id = ?", args: [hashPassword(password), new Date().toISOString(), id] });
+  await getTursoClient().batch(
+    [
+      {
+        sql: "UPDATE app_users SET password_hash = ?, updated_at = ? WHERE id = ?",
+        args: [hashPassword(password), new Date().toISOString(), id],
+      },
+      {
+        sql: "DELETE FROM sessions WHERE user_id = ?",
+        args: [id],
+      },
+    ],
+    "write"
+  );
 }
 
 export async function listUsers() {

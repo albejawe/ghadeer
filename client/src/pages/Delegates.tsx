@@ -3,6 +3,7 @@ import {
   BarChart3,
   Check,
   ClipboardList,
+  Download,
   KeyRound,
   Layers,
   LogOut,
@@ -116,7 +117,21 @@ const number = (value: number | string | null | undefined) =>
   Number(value || 0).toLocaleString("ar-IQ");
 const money = (value: number | string | null | undefined) =>
   `${number(value)} د.ع`;
-const today = new Date().toISOString().slice(0, 10);
+
+function getLocalDateString(d: Date = new Date()): string {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function getYesterdayDateString(): string {
+  const d = new Date();
+  d.setDate(d.getDate() - 1);
+  return getLocalDateString(d);
+}
+
+const today = getLocalDateString();
 
 // =========================================================================
 // UI COMPONENTS (Combobox, Toast, Presets)
@@ -1063,14 +1078,31 @@ function SalesSection({
               </div>
             </div>
 
-            <Field label="تاريخ البيع">
+            <div className="local-field">
+              <span>تاريخ البيع</span>
               <input
                 type="date"
                 value={saleDate}
                 onChange={(e) => setSaleDate(e.target.value)}
                 required
               />
-            </Field>
+              <div className="local-presets">
+                <button
+                  type="button"
+                  className={`local-preset-chip ${saleDate === today ? "active" : ""}`}
+                  onClick={() => setSaleDate(today)}
+                >
+                  اليوم
+                </button>
+                <button
+                  type="button"
+                  className={`local-preset-chip ${saleDate === getYesterdayDateString() ? "active" : ""}`}
+                  onClick={() => setSaleDate(getYesterdayDateString())}
+                >
+                  أمس
+                </button>
+              </div>
+            </div>
           </div>
 
           <div className="local-total">
@@ -1127,14 +1159,31 @@ function SalesSection({
               </select>
             </Field>
 
-            <Field label="تاريخ البيع">
+            <div className="local-field">
+              <span>تاريخ البيع</span>
               <input
                 type="date"
                 value={saleDate}
                 onChange={(e) => setSaleDate(e.target.value)}
                 required
               />
-            </Field>
+              <div className="local-presets">
+                <button
+                  type="button"
+                  className={`local-preset-chip ${saleDate === today ? "active" : ""}`}
+                  onClick={() => setSaleDate(today)}
+                >
+                  اليوم
+                </button>
+                <button
+                  type="button"
+                  className={`local-preset-chip ${saleDate === getYesterdayDateString() ? "active" : ""}`}
+                  onClick={() => setSaleDate(getYesterdayDateString())}
+                >
+                  أمس
+                </button>
+              </div>
+            </div>
           </div>
 
           <div style={{ marginTop: 18 }}>
@@ -1249,25 +1298,77 @@ function SalesSection({
       <div className="local-section-head compact">
         <div>
           <h2>آخر الإدخالات ({filteredSales.length})</h2>
-          <p>بحث وفلترة فورية دون أي تأخير.</p>
+          <p>بحث وفلترة فورية وتصدير إلى Excel.</p>
         </div>
-        <div style={{ position: "relative", width: 220 }}>
-          <input
-            type="text"
-            placeholder="بحث في العمليات..."
-            value={historySearch}
-            onChange={(e) => setHistorySearch(e.target.value)}
-            style={{
-              width: "100%",
-              height: 36,
-              padding: "0 30px 0 10px",
-              borderRadius: 10,
-              border: "1px solid #dfe8e5",
-              background: "#fff",
-              fontSize: 11,
-              fontWeight: 700,
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <button
+            type="button"
+            onClick={() => {
+              if (!filteredSales.length) {
+                showToast("لا توجد مبيعات لتصديرها", "info");
+                return;
+              }
+              const headers = ["التاريخ", "المحافظة", "المندوب", "الشركة", "المادة", "الكمية", "سعر المفرد", "المجموع", "المشرف"];
+              const rows = filteredSales.map((s) => [
+                s.saleDate,
+                `"${s.governorate}"`,
+                `"${s.representative}"`,
+                `"${s.company}"`,
+                `"${s.material}"`,
+                s.quantity,
+                s.unitPrice,
+                s.totalAmount,
+                `"${s.supervisor}"`,
+              ]);
+              const csvContent = "\uFEFF" + [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+              const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+              const url = URL.createObjectURL(blob);
+              const link = document.createElement("a");
+              link.setAttribute("href", url);
+              link.setAttribute("download", `sales_report_${today}.csv`);
+              document.body.appendChild(link);
+              link.click();
+              document.body.removeChild(link);
+              showToast("✓ تم تصدير التقرير (Excel / CSV) بنجاح");
             }}
-          />
+            style={{
+              background: "#e7f4f0",
+              color: "#087f6a",
+              border: "1px solid #cce8e0",
+              borderRadius: 10,
+              padding: "0 12px",
+              height: 36,
+              cursor: "pointer",
+              fontSize: 11,
+              fontWeight: 800,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 5,
+              whiteSpace: "nowrap",
+            }}
+            title="تصدير المبيعات الحالية كملف Excel"
+          >
+            <Download size={13} />
+            <span>تصدير Excel</span>
+          </button>
+
+          <div style={{ position: "relative", width: 180 }}>
+            <input
+              type="text"
+              placeholder="بحث في العمليات..."
+              value={historySearch}
+              onChange={(e) => setHistorySearch(e.target.value)}
+              style={{
+                width: "100%",
+                height: 36,
+                padding: "0 30px 0 10px",
+                borderRadius: 10,
+                border: "1px solid #dfe8e5",
+                background: "#fff",
+                fontSize: 11,
+                fontWeight: 700,
+              }}
+            />
           <Search
             size={14}
             style={{
@@ -1296,6 +1397,7 @@ function SalesSection({
               ✕
             </button>
           )}
+          </div>
         </div>
       </div>
 
@@ -1495,14 +1597,31 @@ function WarehouseSection({
             </select>
           </Field>
 
-          <Field label="تاريخ خروج البضاعة">
+          <div className="local-field">
+            <span>تاريخ خروج البضاعة</span>
             <input
               type="date"
               value={form.saleDate}
               onChange={(e) => setForm({ ...form, saleDate: e.target.value })}
               required
             />
-          </Field>
+            <div className="local-presets">
+              <button
+                type="button"
+                className={`local-preset-chip ${form.saleDate === today ? "active" : ""}`}
+                onClick={() => setForm({ ...form, saleDate: today })}
+              >
+                اليوم
+              </button>
+              <button
+                type="button"
+                className={`local-preset-chip ${form.saleDate === getYesterdayDateString() ? "active" : ""}`}
+                onClick={() => setForm({ ...form, saleDate: getYesterdayDateString() })}
+              >
+                أمس
+              </button>
+            </div>
+          </div>
 
           <div className="local-field">
             <span>عدد القطع الخارجة من المذخر <strong style={{ color: "#bd4545" }}>*</strong></span>
