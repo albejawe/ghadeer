@@ -1549,3 +1549,35 @@
     grid-template-columns: 1fr;
   }
 }
+
+.local-nav {
+  position: sticky;
+  top: 8px;
+  z-index: 50;
+  box-shadow: 0 8px 22px rgba(16, 34, 31, 0.08);
+}
+.target-period-picker {
+  display: flex;
+  align-items: flex-end;
+  gap: 16px;
+}
+.target-period-picker .local-field {
+  max-width: 260px;
+}
+.target-period-hint {
+  padding-bottom: 10px;
+  color: #667a75;
+  font-size: 11px;
+}
+@media (max-width: 600px) {
+  .target-period-picker {
+    display: block;
+  }
+  .target-period-picker .local-field {
+    max-width: none;
+  }
+  .target-period-hint {
+    padding-top: 8px;
+    padding-bottom: 0;
+  }
+}

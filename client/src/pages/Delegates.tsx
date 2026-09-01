@@ -2119,23 +2119,24 @@ function TargetsSection({
         </div>
         <Target />
       </div>
-      <div className="local-period">
-        <Field label="السنة">
+      <div className="local-period target-period-picker">
+        <label className="local-field">
+          <span>شهر الهدف</span>
           <input
-            type="number"
-            value={year}
-            onChange={e => setYear(e.target.value)}
+            type="month"
+            value={`${year}-${String(month).padStart(2, "0")}`}
+            onChange={event => {
+              const [nextYear, nextMonth] = event.target.value.split("-");
+              if (nextYear && nextMonth) {
+                setYear(nextYear);
+                setMonth(String(Number(nextMonth)));
+              }
+            }}
           />
-        </Field>
-        <Field label="الشهر">
-          <input
-            type="number"
-            min="1"
-            max="12"
-            value={month}
-            onChange={e => setMonth(e.target.value)}
-          />
-        </Field>
+        </label>
+        <div className="target-period-hint">
+          اختر الشهر لعرض أهداف المحافظات وحفظها
+        </div>
       </div>
       <div className="local-target-grid">
         {reference.governorates.map(gov => {
