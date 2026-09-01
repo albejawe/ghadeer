@@ -198,6 +198,12 @@ export function DelegatesDashboard({
       .filter(row => row.quantity > 0)
       .sort((a, b) => b.quantity - a.quantity)
       .slice(0, 5);
+  const rankAll = (
+    rows: { name: string; quantity: number; amount?: number }[]
+  ) =>
+    rows
+      .filter(row => row.quantity > 0)
+      .sort((a, b) => b.quantity - a.quantity);
   const repRanking = rank(
     Object.values(
       scopedSales.reduce<
@@ -211,35 +217,32 @@ export function DelegatesDashboard({
       }, {})
     )
   );
-  const materialRanking = rank(
-    Object.values(
-      [
-        ...scopedSales,
-        ...scopedBatches.flatMap(batch =>
-          batch.items.map(item => ({
-            ...item,
-            representative: "",
-            quantity: -item.quantity,
-            totalAmount: -item.totalAmount,
-            materialId: item.materialId,
-            material: item.material,
-          }))
-        ),
-      ].reduce<
-        Record<string, { name: string; quantity: number; amount: number }>
-      >((out, item) => {
-        const key = item.materialId;
-        out[key] ||= { name: item.material, quantity: 0, amount: 0 };
-        out[key].quantity += item.quantity;
-        out[key].amount += item.totalAmount;
-        return out;
-      }, {})
-    ).map(item => ({
-      ...item,
-      quantity: Math.abs(item.quantity),
-      amount: Math.abs(item.amount),
-    }))
-  );
+  const materialMovement = new Map<
+    string,
+    { name: string; quantity: number; amount: number }
+  >();
+  for (const sale of scopedSales) {
+    const current = materialMovement.get(sale.materialId) || {
+      name: sale.material,
+      quantity: 0,
+      amount: 0,
+    };
+    current.quantity += sale.quantity;
+    current.amount += sale.totalAmount;
+    materialMovement.set(sale.materialId, current);
+  }
+  for (const batch of scopedBatches)
+    for (const item of batch.items) {
+      const current = materialMovement.get(item.materialId) || {
+        name: item.material,
+        quantity: 0,
+        amount: 0,
+      };
+      current.quantity += item.quantity;
+      current.amount += item.totalAmount;
+      materialMovement.set(item.materialId, current);
+    }
+  const materialRanking = rankAll(Array.from(materialMovement.values()));
   const govRanking = rank(
     reference.governorates.map(gov => ({
       name: gov.name,
