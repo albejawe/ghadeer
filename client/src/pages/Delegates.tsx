@@ -508,14 +508,32 @@ export default function Delegates() {
     void load();
   }, []);
 
-  if (!user && !initialLoading) {
+  if (initialLoading) {
+    return (
+      <main className="local-app">
+        <div className="local-loading">جارٍ تجهيز لوحة العمل...</div>
+      </main>
+    );
+  }
+
+  if (!user) {
     return <Login setup={setup} onDone={next => void load(next)} />;
   }
 
-  if (initialLoading || !reference || !user) {
+  if (!reference) {
     return (
       <main className="local-app">
-        <div className="local-loading">جارٍ تجهيز لوحة العمل الفائقة...</div>
+        <section className="local-load-recovery">
+          <h1>تعذر فتح البيانات</h1>
+          <p>{error || "تحقق من اتصال الإنترنت ثم أعد المحاولة."}</p>
+          <button
+            type="button"
+            className="local-primary"
+            onClick={() => void load(user)}
+          >
+            إعادة المحاولة
+          </button>
+        </section>
       </main>
     );
   }
