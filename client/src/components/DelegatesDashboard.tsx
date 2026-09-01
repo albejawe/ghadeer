@@ -1,6 +1,5 @@
 import { BarChart3, MapPin, Package, Target, Users } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-
 type Ref = {
   governorates: { id: string; name: string }[];
   companies: { id: string; name: string }[];
@@ -52,7 +51,6 @@ type Batch = {
 };
 const number = (value: number) => value.toLocaleString("en-US");
 const money = (value: number) => `${number(value)} د.ع`;
-
 async function api<T>(path: string): Promise<T> {
   const response = await fetch(`/api/local${path}`, { credentials: "include" });
   if (!response.ok) throw new Error();
@@ -60,7 +58,6 @@ async function api<T>(path: string): Promise<T> {
 }
 const datePrefix = (date: Date) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
-
 export function DelegatesDashboard({
   reference,
   sales,
@@ -306,39 +303,49 @@ export function DelegatesDashboard({
         });
   return (
     <section className="local-content local-dashboard">
+      {" "}
       <div className="local-dashboard-heading">
+        {" "}
         <div>
-          <span className="local-kicker">لوحة الإحصائيات</span>
-          <h2>صورة المبيعات الكاملة</h2>
+          {" "}
+          <span className="local-kicker">لوحة الإحصائيات</span>{" "}
+          <h2>صورة المبيعات الكاملة</h2>{" "}
           <p>
+            {" "}
             الفترة المختارة: <strong>{label}</strong> — تتحدث البطاقات والترتيب
-            مع كل فلتر.
-          </p>
-        </div>
-        <BarChart3 />
-      </div>
+            مع كل فلتر.{" "}
+          </p>{" "}
+        </div>{" "}
+        <BarChart3 />{" "}
+      </div>{" "}
       <div className="local-period-bar dashboard-period">
+        {" "}
         <div className="local-period-actions">
+          {" "}
           <button
             className={period === "current" ? "active" : ""}
             onClick={() => setPeriod("current")}
           >
-            هذا الشهر
-          </button>
+            {" "}
+            هذا الشهر{" "}
+          </button>{" "}
           <button
             className={period === "previous" ? "active" : ""}
             onClick={() => setPeriod("previous")}
           >
-            الشهر السابق
-          </button>
+            {" "}
+            الشهر السابق{" "}
+          </button>{" "}
           <button
             className={period === "all" ? "active" : ""}
             onClick={() => setPeriod("all")}
           >
-            كل الفترات
-          </button>
+            {" "}
+            كل الفترات{" "}
+          </button>{" "}
           <label className={period === "custom" ? "active custom" : "custom"}>
-            شهر محدد
+            {" "}
+            شهر محدد{" "}
             <input
               type="month"
               value={month}
@@ -346,11 +353,12 @@ export function DelegatesDashboard({
                 setMonth(event.target.value);
                 setPeriod("custom");
               }}
-            />
-          </label>
-        </div>
-      </div>
+            />{" "}
+          </label>{" "}
+        </div>{" "}
+      </div>{" "}
       <div className="local-dashboard-filters">
+        {" "}
         <select
           value={filters.governorateId}
           onChange={event =>
@@ -361,13 +369,15 @@ export function DelegatesDashboard({
             })
           }
         >
-          <option value="">كل المحافظات</option>
+          {" "}
+          <option value="">كل المحافظات</option>{" "}
           {reference.governorates.map(item => (
-            <option key={item.id} value={item.name}>
-              {item.name}
+            <option key={item.id} value={item.id}>
+              {" "}
+              {item.name}{" "}
             </option>
-          ))}
-        </select>
+          ))}{" "}
+        </select>{" "}
         <select
           value={filters.companyId}
           onChange={event =>
@@ -378,20 +388,23 @@ export function DelegatesDashboard({
             })
           }
         >
-          <option value="">كل الشركات</option>
+          {" "}
+          <option value="">كل الشركات</option>{" "}
           {reference.companies.map(item => (
-            <option key={item.id} value={item.name}>
-              {item.name}
+            <option key={item.id} value={item.id}>
+              {" "}
+              {item.name}{" "}
             </option>
-          ))}
-        </select>
+          ))}{" "}
+        </select>{" "}
         <select
           value={filters.representativeId}
           onChange={event =>
             setFilters({ ...filters, representativeId: event.target.value })
           }
         >
-          <option value="">كل المندوبين</option>
+          {" "}
+          <option value="">كل المندوبين</option>{" "}
           {reference.representatives
             .filter(
               item =>
@@ -400,27 +413,30 @@ export function DelegatesDashboard({
             )
             .map(item => (
               <option key={item.id} value={item.name}>
-                {item.name}
+                {" "}
+                {item.name}{" "}
               </option>
-            ))}
-        </select>
+            ))}{" "}
+        </select>{" "}
         <select
           value={filters.materialId}
           onChange={event =>
             setFilters({ ...filters, materialId: event.target.value })
           }
         >
-          <option value="">كل المواد</option>
+          {" "}
+          <option value="">كل المواد</option>{" "}
           {reference.materials
             .filter(
               item => !filters.companyId || item.companyId === filters.companyId
             )
             .map(item => (
-              <option key={item.id} value={item.name}>
-                {item.name}
+              <option key={item.id} value={item.id}>
+                {" "}
+                {item.name}{" "}
               </option>
-            ))}
-        </select>
+            ))}{" "}
+        </select>{" "}
         <button
           className="local-secondary"
           onClick={() =>
@@ -432,73 +448,84 @@ export function DelegatesDashboard({
             })
           }
         >
-          مسح الفلاتر
-        </button>
-      </div>
+          {" "}
+          مسح الفلاتر{" "}
+        </button>{" "}
+      </div>{" "}
       <div className="local-dashboard-cards">
+        {" "}
         <Metric
           icon={<Package />}
           label="إجمالي المذخر"
           value={`${number(warehouseUnits)} قطعة`}
           note={money(warehouseAmount)}
-        />
+        />{" "}
         <Metric
           icon={<Users />}
           label="مبيعات المندوبين"
           value={`${number(repUnits)} قطعة`}
           note={money(repAmount)}
-        />
+        />{" "}
         <Metric
           icon={<MapPin />}
           label="المباشر من المذخر"
           value={`${number(directUnits)} قطعة`}
           note="إجمالي المذخر − مبيعات المندوبين"
-        />
+        />{" "}
         <Metric
           icon={<Target />}
           label="عدد عمليات المندوبين"
           value={number(scopedSales.length)}
           note="إدخال مسجل"
-        />
-      </div>
+        />{" "}
+      </div>{" "}
       <div className="local-dashboard-grid">
-        <Ranking title="أفضل المندوبين" rows={repRanking} />
-        <Ranking title="المواد الأكثر حركة" rows={materialRanking} />
-        <Ranking title="المحافظات الأعلى" rows={govRanking} />
-      </div>
+        {" "}
+        <Ranking title="أفضل المندوبين" rows={repRanking} />{" "}
+        <Ranking title="المواد الأكثر حركة" rows={materialRanking} />{" "}
+        <Ranking title="المحافظات الأعلى" rows={govRanking} />{" "}
+      </div>{" "}
       {period !== "all" && (
         <section className="local-target-board">
+          {" "}
           <div className="local-section-head compact">
+            {" "}
             <div>
-              <h2>تحقيق أهداف المحافظات</h2>
-              <p>يُحسب من إجمالي خروج المذخر في {label}.</p>
-            </div>
-          </div>
+              {" "}
+              <h2>تحقيق أهداف المحافظات</h2>{" "}
+              <p>يُحسب من إجمالي خروج المذخر في {label}.</p>{" "}
+            </div>{" "}
+          </div>{" "}
           <div className="local-target-grid">
+            {" "}
             {targetRows.map(row => (
               <article key={row.governorateId} className="local-target-stat">
-                <strong>{row.governorate}</strong>
-                <b>{row.percent}%</b>
+                {" "}
+                <strong>{row.governorate}</strong> <b>{row.percent}%</b>{" "}
                 <span>
-                  {number(row.sold)} من {number(row.targetQuantity)} قطعة
-                </span>
+                  {" "}
+                  {number(row.sold)} من {number(row.targetQuantity)} قطعة{" "}
+                </span>{" "}
                 <i>
-                  <em style={{ width: `${Math.min(row.percent, 100)}%` }} />
-                </i>
+                  {" "}
+                  <em
+                    style={{ width: `${Math.min(row.percent, 100)}%` }}
+                  />{" "}
+                </i>{" "}
               </article>
-            ))}
+            ))}{" "}
             {!targetRows.length && (
               <div className="local-empty">
-                لا توجد أهداف محفوظة لهذه الفترة.
+                {" "}
+                لا توجد أهداف محفوظة لهذه الفترة.{" "}
               </div>
-            )}
-          </div>
+            )}{" "}
+          </div>{" "}
         </section>
-      )}
+      )}{" "}
     </section>
   );
 }
-
 function Metric({
   icon,
   label,
@@ -512,10 +539,9 @@ function Metric({
 }) {
   return (
     <article className="local-dashboard-card">
-      <span>{icon}</span>
-      <small>{label}</small>
-      <strong>{value}</strong>
-      <p>{note}</p>
+      {" "}
+      <span>{icon}</span> <small>{label}</small> <strong>{value}</strong>{" "}
+      <p>{note}</p>{" "}
     </article>
   );
 }
@@ -529,24 +555,29 @@ function Ranking({
   const top = rows[0]?.quantity || 1;
   return (
     <section className="local-ranking">
-      <h3>{title}</h3>
+      {" "}
+      <h3>{title}</h3>{" "}
       {rows.map((row, index) => (
         <div key={row.name}>
-          <b>{index + 1}</b>
+          {" "}
+          <b>{index + 1}</b>{" "}
           <span>
-            {row.name}
+            {" "}
+            {row.name}{" "}
             <i>
+              {" "}
               <em
                 style={{ width: `${Math.max(8, (row.quantity / top) * 100)}%` }}
-              />
-            </i>
-          </span>
+              />{" "}
+            </i>{" "}
+          </span>{" "}
           <strong>
-            {number(row.quantity)} <small>قطعة</small>
-          </strong>
+            {" "}
+            {number(row.quantity)} <small>قطعة</small>{" "}
+          </strong>{" "}
         </div>
-      ))}
-      {!rows.length && <p>لا توجد بيانات لهذه الفلاتر.</p>}
+      ))}{" "}
+      {!rows.length && <p>لا توجد بيانات لهذه الفلاتر.</p>}{" "}
     </section>
   );
 }

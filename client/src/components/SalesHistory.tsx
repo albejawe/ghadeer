@@ -78,6 +78,11 @@ export function SalesHistory({
       }),
     [sales, query, filters]
   );
+  const filteredUnits = filtered.reduce((sum, sale) => sum + sale.quantity, 0);
+  const filteredAmount = filtered.reduce(
+    (sum, sale) => sum + sale.totalAmount,
+    0
+  );
   const exportReport = () => {
     if (!filtered.length) return onMessage("لا توجد مبيعات لتصديرها", "info");
     const units = filtered.reduce((sum, sale) => sum + sale.quantity, 0);
@@ -177,6 +182,20 @@ export function SalesHistory({
         >
           <Download size={14} /> تصدير التقرير
         </button>
+      </div>
+      <div className="local-history-summary">
+        <div>
+          <span>الإدخالات المطابقة</span>
+          <strong>{number(filtered.length)}</strong>
+        </div>
+        <div>
+          <span>القطع</span>
+          <strong>{number(filteredUnits)}</strong>
+        </div>
+        <div>
+          <span>المبلغ</span>
+          <strong>{money(filteredAmount)}</strong>
+        </div>
       </div>
       <div className="local-history-filters">
         <input

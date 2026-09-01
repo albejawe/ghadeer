@@ -8,6 +8,7 @@ import {
   Layers,
   LogOut,
   Plus,
+  Pencil,
   RefreshCw,
   Search,
   ShieldCheck,
@@ -2118,7 +2119,6 @@ function TargetsSection({
         </div>
         <Target />
       </div>
-
       <div className="local-period">
         <Field label="السنة">
           <input
@@ -2137,7 +2137,6 @@ function TargetsSection({
           />
         </Field>
       </div>
-
       <div className="local-target-grid">
         {reference.governorates.map(gov => {
           const existing = records.find(item => item.governorateId === gov.id);
@@ -2264,6 +2263,43 @@ function TargetsSection({
           );
         })}
       </div>
+      <section className="local-target-saved">
+        <div className="local-section-head compact">
+          <div>
+            <h2>
+              الأهداف المحفوظة — {year}/{String(month).padStart(2, "0")}
+            </h2>
+            <p>كل محافظة وتارغتها في الشهر المحدد.</p>
+          </div>
+        </div>
+        <div className="local-list">
+          {records.map(record => (
+            <article className="local-list-row" key={record.id}>
+              <div>
+                <strong>{record.governorate}</strong>
+                <span>
+                  هدف القطع: {number(record.targetQuantity)}
+                  {record.targetAmount != null
+                    ? ` · الهدف المالي: ${money(record.targetAmount)}`
+                    : ""}
+                </span>
+              </div>
+              <button
+                type="button"
+                className="local-danger-button"
+                onClick={() => void removeTarget(record)}
+              >
+                <Trash2 size={14} /> حذف
+              </button>
+            </article>
+          ))}
+          {!records.length && (
+            <div className="local-empty">
+              لا توجد أهداف محفوظة لهذا الشهر بعد.
+            </div>
+          )}
+        </div>
+      </section>{" "}
     </section>
   );
 }
@@ -2423,6 +2459,59 @@ function PeopleSection({
     }
   };
 
+  const editRep = async (rep: Representative) => {
+    const name = window.prompt("اسم المندوب", rep.name)?.trim();
+    if (!name) return;
+    const governorate = window
+      .prompt(
+        "اسم المحافظة",
+        reference.governorates.find(item => item.id === rep.governorateId)
+          ?.name || ""
+      )
+      ?.trim();
+    if (!governorate) return;
+    const governorateId = reference.governorates.find(
+      item => item.name === governorate
+    )?.id;
+    if (!governorateId)
+      return showToast("اختر اسم محافظة موجوداً تماماً", "error");
+    try {
+      await api(`/representatives/${rep.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ name, governorateId }),
+      });
+      setReference(prev =>
+        prev
+          ? {
+              ...prev,
+              representatives: prev.representatives.map(item =>
+                item.id === rep.id ? { ...item, name, governorateId } : item
+              ),
+            }
+          : null
+      );
+      showToast("تم تعديل المندوب");
+      reload(true);
+    } catch {
+      showToast("تعذر تعديل المندوب", "error");
+    }
+  };
+
+  const deleteSupervisor = async (account: User) => {
+    if (
+      !window.confirm(
+        `حذف حساب المشرف ${account.displayName}؟ سيُمنع من الدخول فوراً.`
+      )
+    )
+      return;
+    try {
+      await api(`/users/${account.id}`, { method: "DELETE" });
+      setUsersList(items => items.filter(item => item.id !== account.id));
+      showToast("تم حذف حساب المشرف");
+    } catch {
+      showToast("تعذر حذف حساب المشرف", "error");
+    }
+  };
   // Add Supervisor
   const addSupervisor = async (e: FormEvent) => {
     e.preventDefault();
@@ -2641,6 +2730,15 @@ function PeopleSection({
                   <div
                     style={{ display: "flex", alignItems: "center", gap: 8 }}
                   >
+                    {u.role === "supervisor" && (
+                      <button
+                        type="button"
+                        className="local-danger-button"
+                        onClick={() => void deleteSupervisor(u)}
+                      >
+                        <Trash2 size={14} /> حذف
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => void resetPassword(u.id, u.displayName)}
@@ -2749,6 +2847,13 @@ function PeopleSection({
                 <span>{gov?.name || "محافظة غير محددة"}</span>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <button
+                  type="button"
+                  className="local-plain-button"
+                  onClick={() => void editRep(item)}
+                >
+                  <Pencil size={14} /> تعديل
+                </button>
                 <button
                   type="button"
                   onClick={() => void deleteRep(item.id, item.name)}
