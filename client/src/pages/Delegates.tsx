@@ -22,6 +22,9 @@ import {
 } from "lucide-react";
 import { SaleNotifications } from "../components/SaleNotifications";
 import { SalesHistory } from "../components/SalesHistory";
+import { WarehouseBatches } from "../components/WarehouseBatches";
+import { InventorySection } from "../components/InventorySection";
+import { DelegatesDashboard } from "../components/DelegatesDashboard";
 import "./delegates.css";
 
 // =========================================================================
@@ -111,7 +114,8 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
     },
   });
   const payload = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(String(payload.error || "تعذر تنفيذ الطلب"));
+  if (!response.ok)
+    throw new Error(String(payload.error || "تعذر تنفيذ الطلب"));
   return payload as T;
 }
 
@@ -148,7 +152,7 @@ function ToastContainer({
 }) {
   return (
     <div className="local-toast-container">
-      {toasts.map((toast) => (
+      {toasts.map(toast => (
         <div key={toast.id} className={`local-toast ${toast.type}`}>
           <span>{toast.text}</span>
           <button
@@ -172,7 +176,9 @@ function ToastContainer({
   );
 }
 
-function SearchableCombobox<T extends { id: string; name: string; extra?: string; price?: number }>({
+function SearchableCombobox<
+  T extends { id: string; name: string; extra?: string; price?: number },
+>({
   label,
   items,
   value,
@@ -196,7 +202,7 @@ function SearchableCombobox<T extends { id: string; name: string; extra?: string
   const containerRef = useRef<HTMLDivElement>(null);
 
   const selectedItem = useMemo(
-    () => items.find((item) => item.id === value),
+    () => items.find(item => item.id === value),
     [items, value]
   );
 
@@ -204,7 +210,7 @@ function SearchableCombobox<T extends { id: string; name: string; extra?: string
     if (!query.trim()) return items;
     const lower = query.toLowerCase().trim();
     return items.filter(
-      (item) =>
+      item =>
         item.name.toLowerCase().includes(lower) ||
         (item.extra && item.extra.toLowerCase().includes(lower))
     );
@@ -225,7 +231,9 @@ function SearchableCombobox<T extends { id: string; name: string; extra?: string
 
   return (
     <div className="local-field" ref={containerRef}>
-      <span>{label} {required && <strong style={{ color: "#bd4545" }}>*</strong>}</span>
+      <span>
+        {label} {required && <strong style={{ color: "#bd4545" }}>*</strong>}
+      </span>
       <div className="local-combobox">
         <input
           type="text"
@@ -239,11 +247,11 @@ function SearchableCombobox<T extends { id: string; name: string; extra?: string
               setQuery("");
             }
           }}
-          onChange={(e) => {
+          onChange={e => {
             setQuery(e.target.value);
             setOpen(true);
           }}
-          onKeyDown={(e) => {
+          onKeyDown={e => {
             if (e.key === "Escape") setOpen(false);
             if (e.key === "Enter" && filteredItems.length > 0 && open) {
               e.preventDefault();
@@ -259,7 +267,7 @@ function SearchableCombobox<T extends { id: string; name: string; extra?: string
           <button
             type="button"
             className="local-combobox-clear"
-            onClick={(e) => {
+            onClick={e => {
               e.stopPropagation();
               onChange("");
               setQuery("");
@@ -272,13 +280,13 @@ function SearchableCombobox<T extends { id: string; name: string; extra?: string
 
         {open && !disabled && (
           <div className="local-combobox-dropdown">
-            {filteredItems.map((item) => (
+            {filteredItems.map(item => (
               <div
                 key={item.id}
                 className={`local-combobox-item ${
                   item.id === value ? "selected" : ""
                 }`}
-                onMouseDown={(e) => {
+                onMouseDown={e => {
                   e.preventDefault();
                   onChange(item.id);
                   setOpen(false);
@@ -358,9 +366,7 @@ function Login({
           });
       onDone(result.user);
     } catch (cause) {
-      setError(
-        cause instanceof Error ? cause.message : "تعذر تسجيل الدخول"
-      );
+      setError(cause instanceof Error ? cause.message : "تعذر تسجيل الدخول");
     } finally {
       setBusy(false);
     }
@@ -384,7 +390,7 @@ function Login({
             <Field label="اسم الأدمن">
               <input
                 value={displayName}
-                onChange={(e) => setDisplayName(e.target.value)}
+                onChange={e => setDisplayName(e.target.value)}
                 required
               />
             </Field>
@@ -392,7 +398,7 @@ function Login({
           <Field label="اسم المستخدم">
             <input
               value={username}
-              onChange={(e) => setUsername(e.target.value)}
+              onChange={e => setUsername(e.target.value)}
               required
             />
           </Field>
@@ -401,17 +407,13 @@ function Login({
               type="password"
               minLength={6}
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={e => setPassword(e.target.value)}
               required
             />
           </Field>
           {error && <div className="local-error">{error}</div>}
           <button className="local-primary" disabled={busy}>
-            {busy
-              ? "جارٍ التحقق..."
-              : setup
-              ? "إنشاء الحساب والدخول"
-              : "دخول"}
+            {busy ? "جارٍ التحقق..." : setup ? "إنشاء الحساب والدخول" : "دخول"}
           </button>
         </form>
       </div>
@@ -431,23 +433,32 @@ export default function Delegates() {
   const [warehouse, setWarehouse] = useState<WarehouseSale[]>([]);
   const [targets, setTargets] = useState<TargetRecord[]>([]);
   const [section, setSection] = useState<
-    "sales" | "warehouse" | "targets" | "people"
-  >("sales");
+    | "dashboard"
+    | "sales"
+    | "history"
+    | "warehouse"
+    | "inventory"
+    | "targets"
+    | "people"
+  >("dashboard");
   const [initialLoading, setInitialLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
-  const showToast = (text: string, type: "success" | "error" | "info" = "success") => {
+  const showToast = (
+    text: string,
+    type: "success" | "error" | "info" = "success"
+  ) => {
     const id = Math.random().toString(36).slice(2, 9);
-    setToasts((prev) => [...prev, { id, text, type }]);
+    setToasts(prev => [...prev, { id, text, type }]);
     setTimeout(() => {
-      setToasts((prev) => prev.filter((t) => t.id !== id));
+      setToasts(prev => prev.filter(t => t.id !== id));
     }, 2800);
   };
 
   const dismissToast = (id: string) => {
-    setToasts((prev) => prev.filter((t) => t.id !== id));
+    setToasts(prev => prev.filter(t => t.id !== id));
   };
 
   const load = async (currentUser?: User, silent = false) => {
@@ -486,9 +497,7 @@ export default function Delegates() {
       setWarehouse(warehouseData.sales);
       setTargets(targetData.targets);
     } catch (cause) {
-      setError(
-        cause instanceof Error ? cause.message : "تعذر تحميل البيانات"
-      );
+      setError(cause instanceof Error ? cause.message : "تعذر تحميل البيانات");
     } finally {
       setInitialLoading(false);
       setRefreshing(false);
@@ -500,7 +509,7 @@ export default function Delegates() {
   }, []);
 
   if (!user && !initialLoading) {
-    return <Login setup={setup} onDone={(next) => void load(next)} />;
+    return <Login setup={setup} onDone={next => void load(next)} />;
   }
 
   if (initialLoading || !reference || !user) {
@@ -570,8 +579,24 @@ function AppShell({
   setWarehouse: React.Dispatch<React.SetStateAction<WarehouseSale[]>>;
   targets: TargetRecord[];
   setTargets: React.Dispatch<React.SetStateAction<TargetRecord[]>>;
-  section: "sales" | "warehouse" | "targets" | "people";
-  setSection: (value: "sales" | "warehouse" | "targets" | "people") => void;
+  section:
+    | "dashboard"
+    | "sales"
+    | "history"
+    | "warehouse"
+    | "inventory"
+    | "targets"
+    | "people";
+  setSection: (
+    value:
+      | "dashboard"
+      | "sales"
+      | "history"
+      | "warehouse"
+      | "inventory"
+      | "targets"
+      | "people"
+  ) => void;
   error: string;
   refreshing: boolean;
   showToast: (text: string, type?: "success" | "error" | "info") => void;
@@ -583,19 +608,58 @@ function AppShell({
   const currentMonthStr = String(now.getMonth() + 1).padStart(2, "0");
   const previous = new Date(currentYear, now.getMonth() - 1, 1);
   const previousPrefix = `${previous.getFullYear()}-${String(previous.getMonth() + 1).padStart(2, "0")}`;
-  const [period, setPeriod] = useState<"current" | "previous" | "all" | "custom">("current");
-  const [customMonth, setCustomMonth] = useState(`${currentYear}-${currentMonthStr}`);
-  const periodPrefix = period === "current" ? `${currentYear}-${currentMonthStr}` : period === "previous" ? previousPrefix : customMonth;
-  const periodLabel = period === "all" ? "كل الفترات" : period === "current" ? "هذا الشهر" : period === "previous" ? "الشهر السابق" : customMonth || "فترة مخصصة";
+  const [period, setPeriod] = useState<
+    "current" | "previous" | "all" | "custom"
+  >("current");
+  const [customMonth, setCustomMonth] = useState(
+    `${currentYear}-${currentMonthStr}`
+  );
+  const periodPrefix =
+    period === "current"
+      ? `${currentYear}-${currentMonthStr}`
+      : period === "previous"
+        ? previousPrefix
+        : customMonth;
+  const periodLabel =
+    period === "all"
+      ? "كل الفترات"
+      : period === "current"
+        ? "هذا الشهر"
+        : period === "previous"
+          ? "الشهر السابق"
+          : customMonth || "فترة مخصصة";
   const govName = reference.governorates.find(
-    (item) => item.id === user.governorateId
+    item => item.id === user.governorateId
   )?.name;
-  const currentSales = user.role === "admin" ? sales : sales.filter((item) => item.governorateId === user.governorateId);
-  const periodSales = period === "all" ? currentSales : currentSales.filter((item) => item.saleDate.startsWith(periodPrefix));
-  const periodWarehouse = period === "all" ? warehouse : warehouse.filter((item) => item.saleDate ? item.saleDate.startsWith(periodPrefix) : `${item.year}-${String(item.month).padStart(2, "0")}` === periodPrefix);
-  const monthlyUnits = periodSales.reduce((sum, item) => sum + item.quantity, 0);
-  const monthlyAmount = periodSales.reduce((sum, item) => sum + item.totalAmount, 0);
-  const warehouseUnits = periodWarehouse.reduce((sum, item) => sum + item.quantity, 0);
+  const currentSales =
+    user.role === "admin"
+      ? sales
+      : sales.filter(item => item.governorateId === user.governorateId);
+  const periodSales =
+    period === "all"
+      ? currentSales
+      : currentSales.filter(item => item.saleDate.startsWith(periodPrefix));
+  const periodWarehouse =
+    period === "all"
+      ? warehouse
+      : warehouse.filter(item =>
+          item.saleDate
+            ? item.saleDate.startsWith(periodPrefix)
+            : `${item.year}-${String(item.month).padStart(2, "0")}` ===
+              periodPrefix
+        );
+  const monthlyUnits = periodSales.reduce(
+    (sum, item) => sum + item.quantity,
+    0
+  );
+  const monthlyAmount = periodSales.reduce(
+    (sum, item) => sum + item.totalAmount,
+    0
+  );
+  const warehouseUnits = periodWarehouse.reduce(
+    (sum, item) => sum + item.quantity,
+    0
+  );
   const netWarehouseUnits = warehouseUnits - monthlyUnits;
 
   return (
@@ -629,48 +693,85 @@ function AppShell({
           </button>
         </div>
       </header>
-      <section className="local-period-bar" aria-label="فترة الإحصائيات">
-        <div><strong>الفترة: {periodLabel}</strong><span>كل الإحصائيات والسجل أدناه تخص هذه الفترة.</span></div>
-        <div className="local-period-actions">
-          <button type="button" className={period === "current" ? "active" : ""} onClick={() => setPeriod("current")}>هذا الشهر</button>
-          <button type="button" className={period === "previous" ? "active" : ""} onClick={() => setPeriod("previous")}>الشهر السابق</button>
-          <button type="button" className={period === "all" ? "active" : ""} onClick={() => setPeriod("all")}>كل الفترات</button>
-          <label className={period === "custom" ? "active custom" : "custom"}>مخصص<input type="month" value={customMonth} onChange={(event) => { setCustomMonth(event.target.value); setPeriod("custom"); }} /></label>
-        </div>
-      </section>
+      {section !== "dashboard" && (
+        <section className="local-period-bar" aria-label="فترة الإحصائيات">
+          <div>
+            <strong>الفترة: {periodLabel}</strong>
+            <span>كل الإحصائيات والسجل أدناه تخص هذه الفترة.</span>
+          </div>
+          <div className="local-period-actions">
+            <button
+              type="button"
+              className={period === "current" ? "active" : ""}
+              onClick={() => setPeriod("current")}
+            >
+              هذا الشهر
+            </button>
+            <button
+              type="button"
+              className={period === "previous" ? "active" : ""}
+              onClick={() => setPeriod("previous")}
+            >
+              الشهر السابق
+            </button>
+            <button
+              type="button"
+              className={period === "all" ? "active" : ""}
+              onClick={() => setPeriod("all")}
+            >
+              كل الفترات
+            </button>
+            <label className={period === "custom" ? "active custom" : "custom"}>
+              مخصص
+              <input
+                type="month"
+                value={customMonth}
+                onChange={event => {
+                  setCustomMonth(event.target.value);
+                  setPeriod("custom");
+                }}
+              />
+            </label>
+          </div>
+        </section>
+      )}
       {error && <div className="local-error local-wide">{error}</div>}
 
-      <section className="local-summary">
-        <div>
-          <span>قطع المندوبين</span>
-          <strong>{number(monthlyUnits)}</strong>
-        </div>
-        <div>
-          <span>مبالغ المندوبين</span>
-          <strong>{money(monthlyAmount)}</strong>
-        </div>
-        <div>
-          <span>{user.role === "admin" ? "صافي المذخر" : "العمليات"}</span>
-          <strong>
-            {user.role === "admin"
-              ? number(netWarehouseUnits)
-              : number(periodSales.length)}
-          </strong>
-        </div>
-        {user.role === "admin" && (
+      {section !== "dashboard" && (
+        <section className="local-summary">
           <div>
-            <span>إجمالي المذخر</span>
-            <strong>{number(warehouseUnits)}</strong>
+            <span>قطع المندوبين</span>
+            <strong>{number(monthlyUnits)}</strong>
           </div>
-        )}
-      </section>
+          <div>
+            <span>مبالغ المندوبين</span>
+            <strong>{money(monthlyAmount)}</strong>
+          </div>
+          <div>
+            <span>{user.role === "admin" ? "صافي المذخر" : "العمليات"}</span>
+            <strong>
+              {user.role === "admin"
+                ? number(netWarehouseUnits)
+                : number(periodSales.length)}
+            </strong>
+          </div>
+          {user.role === "admin" && (
+            <div>
+              <span>إجمالي المذخر</span>
+              <strong>{number(warehouseUnits)}</strong>
+            </div>
+          )}
+        </section>
+      )}
 
       {user.role === "admin" && (
         <nav className="local-nav">
           {(
             [
-              ["sales", "المبيعات والإدخال", ClipboardList],
+              ["dashboard", "الإحصائيات", BarChart3],
+              ["sales", "إدخال المبيعات", ClipboardList],
               ["warehouse", "مبيعات المذاخر", Store],
+              ["inventory", "المخزون", Layers],
               ["targets", "الأهداف والتارغت", Target],
               ["people", "المستخدمون والمندوبون", Users],
             ] as const
@@ -687,7 +788,15 @@ function AppShell({
         </nav>
       )}
 
-      {section === "sales" && (
+      {section === "dashboard" && user.role === "admin" && (
+        <DelegatesDashboard
+          reference={reference}
+          sales={sales}
+          warehouse={warehouse}
+          targets={targets}
+        />
+      )}
+      {(section === "sales" || user.role !== "admin") && (
         <SalesSection
           user={user}
           reference={reference}
@@ -696,16 +805,26 @@ function AppShell({
           setSales={setSales}
           showToast={showToast}
           reload={reload}
+          onOpenHistory={() => setSection("history")}
+        />
+      )}
+      {section === "history" && user.role === "admin" && (
+        <SalesHistory
+          sales={sales}
+          warehouseUnits={warehouseUnits}
+          onRefresh={() => reload(true)}
+          onMessage={showToast}
         />
       )}
       {section === "warehouse" && user.role === "admin" && (
-        <WarehouseSection
+        <WarehouseBatches
           reference={reference}
-          records={periodWarehouse}
-          setWarehouse={setWarehouse}
           showToast={showToast}
           reload={reload}
         />
+      )}
+      {section === "inventory" && user.role === "admin" && (
+        <InventorySection showToast={showToast} />
       )}
       {section === "targets" && user.role === "admin" && (
         <TargetsSection
@@ -747,6 +866,7 @@ function SalesSection({
   setSales,
   showToast,
   reload,
+  onOpenHistory,
 }: {
   user: User;
   reference: Reference;
@@ -755,6 +875,7 @@ function SalesSection({
   setSales: React.Dispatch<React.SetStateAction<Sale[]>>;
   showToast: (text: string, type?: "success" | "error" | "info") => void;
   reload: (silent?: boolean) => void;
+  onOpenHistory: () => void;
 }) {
   const [entryMode, setEntryMode] = useState<"single" | "batch">("single");
 
@@ -763,9 +884,7 @@ function SalesSection({
     user.governorateId || reference.governorates[0]?.id || ""
   );
   const [representativeId, setRepresentativeId] = useState("");
-  const [companyId, setCompanyId] = useState(
-    reference.companies[0]?.id || ""
-  );
+  const [companyId, setCompanyId] = useState(reference.companies[0]?.id || "");
   const [saleDate, setSaleDate] = useState("");
 
   // Single Item State
@@ -783,35 +902,37 @@ function SalesSection({
   const [historySearch, setHistorySearch] = useState("");
 
   const reps = useMemo(
-    () => reference.representatives.filter((r) => r.governorateId === governorateId),
+    () =>
+      reference.representatives.filter(r => r.governorateId === governorateId),
     [reference.representatives, governorateId]
   );
 
   const materials = useMemo(
     () =>
       reference.materials
-        .filter((m) => !companyId || m.companyId === companyId)
-        .map((m) => ({ id: m.id, name: m.name, price: m.unitPrice })),
+        .filter(m => !companyId || m.companyId === companyId)
+        .map(m => ({ id: m.id, name: m.name, price: m.unitPrice })),
     [reference.materials, companyId]
   );
 
   const chosenMaterial = useMemo(
-    () => reference.materials.find((m) => m.id === materialId),
+    () => reference.materials.find(m => m.id === materialId),
     [reference.materials, materialId]
   );
 
-  const singleTotal = (Number(quantity) || 0) * (chosenMaterial?.unitPrice || 0);
+  const singleTotal =
+    (Number(quantity) || 0) * (chosenMaterial?.unitPrice || 0);
 
   useEffect(() => {
     if (reps.length === 1) {
       setRepresentativeId(reps[0].id);
-    } else if (!reps.some((r) => r.id === representativeId)) {
+    } else if (!reps.some(r => r.id === representativeId)) {
       setRepresentativeId(reps[0]?.id || "");
     }
   }, [governorateId, reps]);
 
   const addPreset = (val: number) => {
-    setQuantity((prev) => {
+    setQuantity(prev => {
       const current = Number(prev) || 0;
       return String(current + val);
     });
@@ -834,9 +955,9 @@ function SalesSection({
       return;
     }
 
-    const currentRep = reps.find((r) => r.id === representativeId);
-    const currentGov = reference.governorates.find((g) => g.id === governorateId);
-    const currentComp = reference.companies.find((c) => c.id === companyId);
+    const currentRep = reps.find(r => r.id === representativeId);
+    const currentGov = reference.governorates.find(g => g.id === governorateId);
+    const currentComp = reference.companies.find(c => c.id === companyId);
 
     const optimisticSale: Sale = {
       id: `opt-${Date.now()}`,
@@ -854,7 +975,7 @@ function SalesSection({
       material: chosenMaterial.name,
     };
 
-    setSales((prev) => [optimisticSale, ...prev]);
+    setSales(prev => [optimisticSale, ...prev]);
     showToast(`✓ تم حفظ ${qty} قطعة (${money(singleTotal)}) بنجاح`);
 
     setMaterialId("");
@@ -878,7 +999,7 @@ function SalesSection({
       });
       reload(true);
     } catch (err) {
-      setSales((prev) => prev.filter((s) => s.id !== optimisticSale.id));
+      setSales(prev => prev.filter(s => s.id !== optimisticSale.id));
       showToast(err instanceof Error ? err.message : "فشل حفظ البيع", "error");
     }
   };
@@ -895,7 +1016,10 @@ function SalesSection({
       return;
     }
     const validItems = batchItems.filter(
-      (item) => item.materialId && Number.isInteger(Number(item.quantity)) && Number(item.quantity) > 0
+      item =>
+        item.materialId &&
+        Number.isInteger(Number(item.quantity)) &&
+        Number(item.quantity) > 0
     );
     if (!validItems.length) {
       showToast("يرجى اختيار مادة واحدة على الأقل وكمية صحيحة", "error");
@@ -903,12 +1027,12 @@ function SalesSection({
     }
 
     setBatchBusy(true);
-    const currentRep = reps.find((r) => r.id === representativeId);
-    const currentGov = reference.governorates.find((g) => g.id === governorateId);
-    const currentComp = reference.companies.find((c) => c.id === companyId);
+    const currentRep = reps.find(r => r.id === representativeId);
+    const currentGov = reference.governorates.find(g => g.id === governorateId);
+    const currentComp = reference.companies.find(c => c.id === companyId);
 
     const optimisticList: Sale[] = validItems.map((item, idx) => {
-      const mat = reference.materials.find((m) => m.id === item.materialId);
+      const mat = reference.materials.find(m => m.id === item.materialId);
       const unitP = mat?.unitPrice || 0;
       const tot = item.quantity * unitP;
       return {
@@ -928,14 +1052,19 @@ function SalesSection({
       };
     });
 
-    setSales((prev) => [...optimisticList, ...prev]);
-    const batchTotalAmount = optimisticList.reduce((s, x) => s + x.totalAmount, 0);
+    setSales(prev => [...optimisticList, ...prev]);
+    const batchTotalAmount = optimisticList.reduce(
+      (s, x) => s + x.totalAmount,
+      0
+    );
     const batchTotalPieces = optimisticList.reduce((s, x) => s + x.quantity, 0);
     showToast(
       `✓ تم تسجيل ${validItems.length} مواد (${number(batchTotalPieces)} قطعة - ${money(batchTotalAmount)})`
     );
 
-    setBatchItems([{ id: Date.now().toString(), materialId: "", quantity: 10 }]);
+    setBatchItems([
+      { id: Date.now().toString(), materialId: "", quantity: 10 },
+    ]);
 
     try {
       await api("/sales/batch", {
@@ -945,7 +1074,7 @@ function SalesSection({
           representativeId,
           companyId,
           saleDate,
-          items: validItems.map((item) => ({
+          items: validItems.map(item => ({
             materialId: item.materialId,
             quantity: item.quantity,
             note: "إدخال متعدد",
@@ -954,10 +1083,13 @@ function SalesSection({
       });
       reload(true);
     } catch (err) {
-      setSales((prev) =>
-        prev.filter((s) => !optimisticList.some((opt) => opt.id === s.id))
+      setSales(prev =>
+        prev.filter(s => !optimisticList.some(opt => opt.id === s.id))
       );
-      showToast(err instanceof Error ? err.message : "تعذر حفظ الإدخال المتعدد", "error");
+      showToast(
+        err instanceof Error ? err.message : "تعذر حفظ الإدخال المتعدد",
+        "error"
+      );
     } finally {
       setBatchBusy(false);
     }
@@ -967,7 +1099,7 @@ function SalesSection({
     if (!historySearch.trim()) return sales;
     const lower = historySearch.toLowerCase().trim();
     return sales.filter(
-      (s) =>
+      s =>
         s.material.toLowerCase().includes(lower) ||
         s.representative.toLowerCase().includes(lower) ||
         s.governorate.toLowerCase().includes(lower) ||
@@ -1012,9 +1144,9 @@ function SalesSection({
               <select
                 value={governorateId}
                 disabled={user.role !== "admin"}
-                onChange={(e) => setGovernorateId(e.target.value)}
+                onChange={e => setGovernorateId(e.target.value)}
               >
-                {reference.governorates.map((item) => (
+                {reference.governorates.map(item => (
                   <option key={item.id} value={item.id}>
                     {item.name}
                   </option>
@@ -1024,7 +1156,7 @@ function SalesSection({
 
             <SearchableCombobox
               label="المندوب"
-              items={reps.map((r) => ({ id: r.id, name: r.name }))}
+              items={reps.map(r => ({ id: r.id, name: r.name }))}
               value={representativeId}
               onChange={setRepresentativeId}
               placeholder="اختر المندوب..."
@@ -1034,13 +1166,13 @@ function SalesSection({
             <Field label="الشركة">
               <select
                 value={companyId}
-                onChange={(e) => {
+                onChange={e => {
                   setCompanyId(e.target.value);
                   setMaterialId("");
                 }}
                 required
               >
-                {reference.companies.map((item) => (
+                {reference.companies.map(item => (
                   <option key={item.id} value={item.id}>
                     {item.name}
                   </option>
@@ -1055,7 +1187,7 @@ function SalesSection({
               onChange={setMaterialId}
               placeholder="اكتب اسم المادة للبحث الفوري..."
               required
-            showSearchIcon={false}
+              showSearchIcon={false}
             />
 
             <div className="local-field">
@@ -1065,7 +1197,7 @@ function SalesSection({
                 min="1"
                 step="1"
                 value={quantity}
-                onChange={(e) => setQuantity(e.target.value)}
+                onChange={e => setQuantity(e.target.value)}
                 placeholder="10"
                 required
               />
@@ -1073,7 +1205,7 @@ function SalesSection({
                 <span style={{ fontSize: 10, color: "#667a75", marginLeft: 4 }}>
                   سريع:
                 </span>
-                {[1, 5, 10, 25, 50, 100].map((val) => (
+                {[1, 5, 10, 25, 50, 100].map(val => (
                   <button
                     key={val}
                     type="button"
@@ -1098,7 +1230,7 @@ function SalesSection({
               <input
                 type="date"
                 value={saleDate}
-                onChange={(e) => setSaleDate(e.target.value)}
+                onChange={e => setSaleDate(e.target.value)}
                 required
               />
               <div className="local-presets">
@@ -1122,7 +1254,8 @@ function SalesSection({
 
           <div className="local-total">
             <span>
-              سعر المفرد: {chosenMaterial ? money(chosenMaterial.unitPrice) : "—"}
+              سعر المفرد:{" "}
+              {chosenMaterial ? money(chosenMaterial.unitPrice) : "—"}
             </span>
             <strong>المجموع: {money(singleTotal)}</strong>
           </div>
@@ -1138,9 +1271,9 @@ function SalesSection({
               <select
                 value={governorateId}
                 disabled={user.role !== "admin"}
-                onChange={(e) => setGovernorateId(e.target.value)}
+                onChange={e => setGovernorateId(e.target.value)}
               >
-                {reference.governorates.map((item) => (
+                {reference.governorates.map(item => (
                   <option key={item.id} value={item.id}>
                     {item.name}
                   </option>
@@ -1150,7 +1283,7 @@ function SalesSection({
 
             <SearchableCombobox
               label="المندوب"
-              items={reps.map((r) => ({ id: r.id, name: r.name }))}
+              items={reps.map(r => ({ id: r.id, name: r.name }))}
               value={representativeId}
               onChange={setRepresentativeId}
               placeholder="اختر المندوب..."
@@ -1160,13 +1293,15 @@ function SalesSection({
             <Field label="الشركة">
               <select
                 value={companyId}
-                onChange={(e) => {
+                onChange={e => {
                   setCompanyId(e.target.value);
-                  setBatchItems([{ id: Date.now().toString(), materialId: "", quantity: 10 }]);
+                  setBatchItems([
+                    { id: Date.now().toString(), materialId: "", quantity: 10 },
+                  ]);
                 }}
                 required
               >
-                {reference.companies.map((item) => (
+                {reference.companies.map(item => (
                   <option key={item.id} value={item.id}>
                     {item.name}
                   </option>
@@ -1179,7 +1314,7 @@ function SalesSection({
               <input
                 type="date"
                 value={saleDate}
-                onChange={(e) => setSaleDate(e.target.value)}
+                onChange={e => setSaleDate(e.target.value)}
                 required
               />
               <div className="local-presets">
@@ -1207,7 +1342,9 @@ function SalesSection({
             </h4>
 
             {batchItems.map((item, index) => {
-              const mat = reference.materials.find((m) => m.id === item.materialId);
+              const mat = reference.materials.find(
+                m => m.id === item.materialId
+              );
               const subtotal = (item.quantity || 0) * (mat?.unitPrice || 0);
 
               return (
@@ -1216,9 +1353,11 @@ function SalesSection({
                     label={`المادة ${index + 1}`}
                     items={materials}
                     value={item.materialId}
-                    onChange={(mId) => {
-                      setBatchItems((prev) =>
-                        prev.map((b) => (b.id === item.id ? { ...b, materialId: mId } : b))
+                    onChange={mId => {
+                      setBatchItems(prev =>
+                        prev.map(b =>
+                          b.id === item.id ? { ...b, materialId: mId } : b
+                        )
                       );
                     }}
                     placeholder="اختر المادة..."
@@ -1230,17 +1369,25 @@ function SalesSection({
                       min="1"
                       step="1"
                       value={item.quantity || ""}
-                      onChange={(e) => {
+                      onChange={e => {
                         const val = Number(e.target.value);
-                        setBatchItems((prev) =>
-                          prev.map((b) => (b.id === item.id ? { ...b, quantity: val } : b))
+                        setBatchItems(prev =>
+                          prev.map(b =>
+                            b.id === item.id ? { ...b, quantity: val } : b
+                          )
                         );
                       }}
                       required
                     />
                   </Field>
                   <div style={{ textAlign: "center" }}>
-                    <span style={{ fontSize: 10, color: "#667a75", display: "block" }}>
+                    <span
+                      style={{
+                        fontSize: 10,
+                        color: "#667a75",
+                        display: "block",
+                      }}
+                    >
                       الإجمالي الفرعي
                     </span>
                     <strong style={{ fontSize: 12, color: "#087f6a" }}>
@@ -1251,7 +1398,9 @@ function SalesSection({
                     <button
                       type="button"
                       onClick={() =>
-                        setBatchItems((prev) => prev.filter((b) => b.id !== item.id))
+                        setBatchItems(prev =>
+                          prev.filter(b => b.id !== item.id)
+                        )
                       }
                       style={{
                         background: "#fee2e2",
@@ -1275,9 +1424,13 @@ function SalesSection({
                 type="button"
                 className="local-btn-add-row"
                 onClick={() =>
-                  setBatchItems((prev) => [
+                  setBatchItems(prev => [
                     ...prev,
-                    { id: Math.random().toString(), materialId: "", quantity: 10 },
+                    {
+                      id: Math.random().toString(),
+                      materialId: "",
+                      quantity: 10,
+                    },
                   ])
                 }
               >
@@ -1291,7 +1444,9 @@ function SalesSection({
                 <strong style={{ fontSize: 16, color: "#087f6a" }}>
                   {money(
                     batchItems.reduce((sum, item) => {
-                      const m = reference.materials.find((x) => x.id === item.materialId);
+                      const m = reference.materials.find(
+                        x => x.id === item.materialId
+                      );
                       return sum + (item.quantity || 0) * (m?.unitPrice || 0);
                     }, 0)
                   )}
@@ -1305,12 +1460,30 @@ function SalesSection({
             style={{ marginTop: 18, width: "100%" }}
             disabled={batchBusy}
           >
-            {batchBusy ? "جارٍ الحفظ الذري..." : <><Check /> حفظ جميع المواد دفعة واحدة</>}
+            {batchBusy ? (
+              "جارٍ الحفظ الذري..."
+            ) : (
+              <>
+                <Check /> حفظ جميع المواد دفعة واحدة
+              </>
+            )}
           </button>
         </form>
       )}
 
-      <SalesHistory sales={sales} warehouseUnits={warehouseUnits} onRefresh={() => reload(true)} onMessage={showToast} />
+      <div className="local-history-link">
+        <div>
+          <h3>آخر الإدخالات والتقارير</h3>
+          <p>افتح شاشة مستقلة لعرض السجل وتعديله وتصديره.</p>
+        </div>
+        <button
+          type="button"
+          className="local-secondary"
+          onClick={onOpenHistory}
+        >
+          عرض جميع الإدخالات
+        </button>
+      </div>
     </section>
   );
 }
@@ -1345,7 +1518,7 @@ function WarehouseSection({
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const addPreset = (val: number) => {
-    setForm((prev) => {
+    setForm(prev => {
       const cur = Number(prev.quantity) || 0;
       return { ...prev, quantity: String(cur + val) };
     });
@@ -1359,7 +1532,7 @@ function WarehouseSection({
       return;
     }
     const amt = form.amount ? Number(form.amount) : null;
-    const gov = reference.governorates.find((g) => g.id === form.governorateId);
+    const gov = reference.governorates.find(g => g.id === form.governorateId);
     const dateObj = new Date(form.saleDate);
     const year = dateObj.getFullYear();
     const month = dateObj.getMonth() + 1;
@@ -1379,11 +1552,11 @@ function WarehouseSection({
     };
 
     // Instant optimistic insertion - add to the top of the list
-    setWarehouse((prev) => [optimisticRecord, ...prev]);
+    setWarehouse(prev => [optimisticRecord, ...prev]);
     showToast(`✓ تم تسجيل خروج ${number(qty)} قطعة لمذخر ${gov?.name || ""}`);
 
     // Reset quantity and note for next entry, preserve governorate and date
-    setForm((prev) => ({ ...prev, quantity: "50", amount: "", note: "" }));
+    setForm(prev => ({ ...prev, quantity: "50", amount: "", note: "" }));
     setBusy(true);
 
     try {
@@ -1399,45 +1572,90 @@ function WarehouseSection({
       });
 
       if (res?.id) {
-        setWarehouse((prev) =>
-          prev.map((r) => (r.id === tempId ? { ...r, id: res.id } : r))
+        setWarehouse(prev =>
+          prev.map(r => (r.id === tempId ? { ...r, id: res.id } : r))
         );
       }
       reload(true);
     } catch (cause) {
-      setWarehouse((prev) => prev.filter((r) => r.id !== tempId));
-      showToast(cause instanceof Error ? cause.message : "تعذر حفظ خروج البضاعة", "error");
+      setWarehouse(prev => prev.filter(r => r.id !== tempId));
+      showToast(
+        cause instanceof Error ? cause.message : "تعذر حفظ خروج البضاعة",
+        "error"
+      );
     } finally {
       setBusy(false);
     }
   };
 
   const editRecord = async (record: WarehouseSale) => {
-    const nextDate = window.prompt("تاريخ الحركة (YYYY-MM-DD)", record.saleDate);
+    const nextDate = window.prompt(
+      "تاريخ الحركة (YYYY-MM-DD)",
+      record.saleDate
+    );
     if (!nextDate) return;
     const nextQuantity = window.prompt("عدد القطع", String(record.quantity));
     if (!nextQuantity) return;
-    const nextAmount = window.prompt("المبلغ (اتركه فارغاً إن لم يوجد)", record.amount == null ? "" : String(record.amount));
+    const nextAmount = window.prompt(
+      "المبلغ (اتركه فارغاً إن لم يوجد)",
+      record.amount == null ? "" : String(record.amount)
+    );
     const nextNote = window.prompt("الملاحظة", record.note || "");
     const quantity = Number(nextQuantity);
-    if (!Number.isInteger(quantity) || quantity <= 0) { showToast("أدخل كمية صحيحة", "error"); return; }
+    if (!Number.isInteger(quantity) || quantity <= 0) {
+      showToast("أدخل كمية صحيحة", "error");
+      return;
+    }
     const amount = nextAmount ? Number(nextAmount) : null;
-    if (amount !== null && (!Number.isFinite(amount) || amount < 0)) { showToast("أدخل مبلغاً صحيحاً", "error"); return; }
+    if (amount !== null && (!Number.isFinite(amount) || amount < 0)) {
+      showToast("أدخل مبلغاً صحيحاً", "error");
+      return;
+    }
     try {
-      await api(`/warehouse-sales/${record.id}`, { method: "PATCH", body: JSON.stringify({ saleDate: nextDate, quantity, amount, note: nextNote || "" }) });
-      setWarehouse((prev) => prev.map((item) => item.id === record.id ? { ...item, saleDate: nextDate, quantity, amount, note: nextNote || "" } : item));
+      await api(`/warehouse-sales/${record.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          saleDate: nextDate,
+          quantity,
+          amount,
+          note: nextNote || "",
+        }),
+      });
+      setWarehouse(prev =>
+        prev.map(item =>
+          item.id === record.id
+            ? {
+                ...item,
+                saleDate: nextDate,
+                quantity,
+                amount,
+                note: nextNote || "",
+              }
+            : item
+        )
+      );
       showToast("تم تعديل حركة المذخر");
       reload(true);
-    } catch { showToast("تعذر تعديل حركة المذخر", "error"); }
+    } catch {
+      showToast("تعذر تعديل حركة المذخر", "error");
+    }
   };
-  const deleteRecord = async (recordId: string, govName: string, pieces: number) => {
-    if (!window.confirm(`هل أنت متأكد من حذف حركة المذخر (${number(pieces)} قطعة - ${govName})؟`)) {
+  const deleteRecord = async (
+    recordId: string,
+    govName: string,
+    pieces: number
+  ) => {
+    if (
+      !window.confirm(
+        `هل أنت متأكد من حذف حركة المذخر (${number(pieces)} قطعة - ${govName})؟`
+      )
+    ) {
       return;
     }
     setDeletingId(recordId);
-    const backup = records.find((r) => r.id === recordId);
+    const backup = records.find(r => r.id === recordId);
 
-    setWarehouse((prev) => prev.filter((r) => r.id !== recordId));
+    setWarehouse(prev => prev.filter(r => r.id !== recordId));
     showToast(`✓ تم حذف حركة المذخر بنجاح`);
 
     try {
@@ -1447,16 +1665,19 @@ function WarehouseSection({
       reload(true);
     } catch (err) {
       if (backup) {
-        setWarehouse((prev) => [backup, ...prev]);
+        setWarehouse(prev => [backup, ...prev]);
       }
-      showToast(err instanceof Error ? err.message : "تعذر حذف الحركة", "error");
+      showToast(
+        err instanceof Error ? err.message : "تعذر حذف الحركة",
+        "error"
+      );
     } finally {
       setDeletingId(null);
     }
   };
 
   const displayedRecords = useMemo(() => {
-    return records.filter((r) => {
+    return records.filter(r => {
       const matchGov = filterGov === "all" || r.governorateId === filterGov;
       const matchSearch =
         !search.trim() ||
@@ -1492,12 +1713,12 @@ function WarehouseSection({
           <Field label="المحافظة">
             <select
               value={form.governorateId}
-              onChange={(e) =>
+              onChange={e =>
                 setForm({ ...form, governorateId: e.target.value })
               }
               required
             >
-              {reference.governorates.map((item) => (
+              {reference.governorates.map(item => (
                 <option key={item.id} value={item.id}>
                   {item.name}
                 </option>
@@ -1510,7 +1731,7 @@ function WarehouseSection({
             <input
               type="date"
               value={form.saleDate}
-              onChange={(e) => setForm({ ...form, saleDate: e.target.value })}
+              onChange={e => setForm({ ...form, saleDate: e.target.value })}
               required
             />
             <div className="local-presets">
@@ -1524,7 +1745,9 @@ function WarehouseSection({
               <button
                 type="button"
                 className={`local-preset-chip ${form.saleDate === getYesterdayDateString() ? "active" : ""}`}
-                onClick={() => setForm({ ...form, saleDate: getYesterdayDateString() })}
+                onClick={() =>
+                  setForm({ ...form, saleDate: getYesterdayDateString() })
+                }
               >
                 أمس
               </button>
@@ -1532,15 +1755,16 @@ function WarehouseSection({
           </div>
 
           <div className="local-field">
-            <span>عدد القطع الخارجة من المذخر <strong style={{ color: "#bd4545" }}>*</strong></span>
+            <span>
+              عدد القطع الخارجة من المذخر{" "}
+              <strong style={{ color: "#bd4545" }}>*</strong>
+            </span>
             <input
               type="number"
               min="1"
               step="1"
               value={form.quantity}
-              onChange={(e) =>
-                setForm({ ...form, quantity: e.target.value })
-              }
+              onChange={e => setForm({ ...form, quantity: e.target.value })}
               placeholder="50"
               required
             />
@@ -1548,7 +1772,7 @@ function WarehouseSection({
               <span style={{ fontSize: 10, color: "#667a75", marginLeft: 4 }}>
                 سريع:
               </span>
-              {[10, 50, 100, 250, 500, 1000].map((val) => (
+              {[10, 50, 100, 250, 500, 1000].map(val => (
                 <button
                   key={val}
                   type="button"
@@ -1574,7 +1798,7 @@ function WarehouseSection({
               min="0"
               placeholder="القيمة بالدينار العراقي (اختياري)"
               value={form.amount}
-              onChange={(e) => setForm({ ...form, amount: e.target.value })}
+              onChange={e => setForm({ ...form, amount: e.target.value })}
             />
           </Field>
 
@@ -1583,12 +1807,16 @@ function WarehouseSection({
               type="text"
               placeholder="مثال: تجهيز شحنة رقم 1"
               value={form.note}
-              onChange={(e) => setForm({ ...form, note: e.target.value })}
+              onChange={e => setForm({ ...form, note: e.target.value })}
             />
           </Field>
         </div>
 
-        <button className="local-primary" style={{ marginTop: 14 }} disabled={busy}>
+        <button
+          className="local-primary"
+          style={{ marginTop: 14 }}
+          disabled={busy}
+        >
           <Check /> {busy ? "جارٍ الحفظ..." : "حفظ حركة المذخر"}
         </button>
       </form>
@@ -1600,7 +1828,10 @@ function WarehouseSection({
           <p>
             مجموع القطع: <strong>{number(totalFilteredQuantity)}</strong>
             {totalFilteredAmount > 0 && (
-              <> · بمبلغ: <strong>{money(totalFilteredAmount)}</strong></>
+              <>
+                {" "}
+                · بمبلغ: <strong>{money(totalFilteredAmount)}</strong>
+              </>
             )}
           </p>
         </div>
@@ -1611,7 +1842,7 @@ function WarehouseSection({
               type="text"
               placeholder="بحث في الحركات..."
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={e => setSearch(e.target.value)}
               style={{
                 width: "100%",
                 height: 36,
@@ -1637,7 +1868,7 @@ function WarehouseSection({
 
           <select
             value={filterGov}
-            onChange={(e) => setFilterGov(e.target.value)}
+            onChange={e => setFilterGov(e.target.value)}
             style={{
               height: 36,
               padding: "0 10px",
@@ -1650,8 +1881,10 @@ function WarehouseSection({
             }}
           >
             <option value="all">جميع المحافظات ({records.length})</option>
-            {reference.governorates.map((gov) => {
-              const count = records.filter((r) => r.governorateId === gov.id).length;
+            {reference.governorates.map(gov => {
+              const count = records.filter(
+                r => r.governorateId === gov.id
+              ).length;
               return (
                 <option key={gov.id} value={gov.id}>
                   {gov.name} ({count})
@@ -1663,7 +1896,7 @@ function WarehouseSection({
       </div>
 
       <div className="local-list">
-        {displayedRecords.map((item) => {
+        {displayedRecords.map(item => {
           const isDeleting = deletingId === item.id;
           return (
             <div className="local-list-row" key={item.id}>
@@ -1685,10 +1918,18 @@ function WarehouseSection({
                       : money(item.amount)}
                   </small>
                 </b>
-                <button type="button" className="local-plain-button" onClick={() => void editRecord(item)}>تعديل</button>
                 <button
                   type="button"
-                  onClick={() => void deleteRecord(item.id, item.governorate, item.quantity)}
+                  className="local-plain-button"
+                  onClick={() => void editRecord(item)}
+                >
+                  تعديل
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    void deleteRecord(item.id, item.governorate, item.quantity)
+                  }
                   disabled={isDeleting}
                   title="حذف الحركة"
                   style={{
@@ -1710,7 +1951,9 @@ function WarehouseSection({
           );
         })}
         {!displayedRecords.length && (
-          <div className="local-empty">لا توجد حركات مذخر مسجلة لهذا التحديد.</div>
+          <div className="local-empty">
+            لا توجد حركات مذخر مسجلة لهذا التحديد.
+          </div>
         )}
       </div>
     </section>
@@ -1756,7 +1999,8 @@ function TargetsSection({
         );
         if (isMounted && res?.targets) {
           setTargets(res.targets);
-          const newVals: Record<string, { quantity: string; amount: string }> = {};
+          const newVals: Record<string, { quantity: string; amount: string }> =
+            {};
           for (const t of res.targets) {
             newVals[t.governorateId] = {
               quantity: String(t.targetQuantity || ""),
@@ -1780,13 +2024,13 @@ function TargetsSection({
   const save = async (governorateId: string) => {
     setSavingGov(governorateId);
     const value = values[governorateId] || { quantity: "", amount: "" };
-    const govObj = reference.governorates.find((g) => g.id === governorateId);
+    const govObj = reference.governorates.find(g => g.id === governorateId);
     const qty = Number(value.quantity || 0);
     const amt = value.amount ? Number(value.amount) : null;
 
-    setTargets((prev) => {
+    setTargets(prev => {
       const filtered = prev.filter(
-        (t) =>
+        t =>
           !(
             t.governorateId === governorateId &&
             t.year === Number(year) &&
@@ -1832,10 +2076,15 @@ function TargetsSection({
     if (!window.confirm(`حذف هدف ${record.governorate} لهذه الفترة؟`)) return;
     try {
       await api(`/targets/${record.id}`, { method: "DELETE" });
-      setTargets((prev) => prev.filter((target) => target.id !== record.id));
-      setValues((prev) => ({ ...prev, [record.governorateId]: { quantity: "", amount: "" } }));
+      setTargets(prev => prev.filter(target => target.id !== record.id));
+      setValues(prev => ({
+        ...prev,
+        [record.governorateId]: { quantity: "", amount: "" },
+      }));
       showToast("تم حذف الهدف");
-    } catch { showToast("تعذر حذف الهدف", "error"); }
+    } catch {
+      showToast("تعذر حذف الهدف", "error");
+    }
   };
   const periodPrefix = `${year}-${String(month).padStart(2, "0")}`;
 
@@ -1845,7 +2094,9 @@ function TargetsSection({
         <div>
           <span className="local-kicker">خطة الشهر ومتابعة الإنجاز</span>
           <h2>أهداف المحافظات (التارغت)</h2>
-          <p>تحديد خطط كل المحافظات ومتابعة نسبة الإنجاز والقطع المتحققة لحظياً.</p>
+          <p>
+            تحديد خطط كل المحافظات ومتابعة نسبة الإنجاز والقطع المتحققة لحظياً.
+          </p>
         </div>
         <Target />
       </div>
@@ -1855,7 +2106,7 @@ function TargetsSection({
           <input
             type="number"
             value={year}
-            onChange={(e) => setYear(e.target.value)}
+            onChange={e => setYear(e.target.value)}
           />
         </Field>
         <Field label="الشهر">
@@ -1864,16 +2115,14 @@ function TargetsSection({
             min="1"
             max="12"
             value={month}
-            onChange={(e) => setMonth(e.target.value)}
+            onChange={e => setMonth(e.target.value)}
           />
         </Field>
       </div>
 
       <div className="local-target-grid">
-        {reference.governorates.map((gov) => {
-          const existing = records.find(
-            (item) => item.governorateId === gov.id
-          );
+        {reference.governorates.map(gov => {
+          const existing = records.find(item => item.governorateId === gov.id);
           const value = values[gov.id] || {
             quantity: existing ? String(existing.targetQuantity) : "",
             amount:
@@ -1885,13 +2134,17 @@ function TargetsSection({
 
           // Calculate live achieved sales for this gov in this period
           const govSales = sales.filter(
-            (s) =>
+            s =>
               s.governorateId === gov.id &&
               s.saleDate &&
               s.saleDate.startsWith(periodPrefix)
           );
-          const achievedUnits = govSales.reduce((sum, s) => sum + s.quantity, 0);
-          const targetUnits = Number(value.quantity) || existing?.targetQuantity || 0;
+          const achievedUnits = govSales.reduce(
+            (sum, s) => sum + s.quantity,
+            0
+          );
+          const targetUnits =
+            Number(value.quantity) || existing?.targetQuantity || 0;
           const percentage =
             targetUnits > 0
               ? Math.min(Math.round((achievedUnits / targetUnits) * 100), 100)
@@ -1901,17 +2154,17 @@ function TargetsSection({
             percentage >= 100
               ? "achieved"
               : percentage >= 65
-              ? "near"
-              : "in-progress";
+                ? "near"
+                : "in-progress";
 
           const badgeLabel =
             targetUnits === 0
               ? "لم يحدد"
               : percentage >= 100
-              ? "✓ محقق بالكامل"
-              : percentage >= 65
-              ? `قريب (${percentage}%)`
-              : `قيد التقدم (${percentage}%)`;
+                ? "✓ محقق بالكامل"
+                : percentage >= 65
+                  ? `قريب (${percentage}%)`
+                  : `قيد التقدم (${percentage}%)`;
 
           const progressColor =
             percentage >= 100 ? "green" : percentage >= 65 ? "amber" : "slate";
@@ -1921,8 +2174,16 @@ function TargetsSection({
               <div className="local-target-card-header">
                 <div>
                   <strong style={{ fontSize: 14 }}>{gov.name}</strong>
-                  <span style={{ fontSize: 11, color: "#667a75", display: "block", marginTop: 2 }}>
-                    المتحقق: <b>{number(achievedUnits)}</b> / المستهدف: <b>{number(targetUnits)}</b> قطعة
+                  <span
+                    style={{
+                      fontSize: 11,
+                      color: "#667a75",
+                      display: "block",
+                      marginTop: 2,
+                    }}
+                  >
+                    المتحقق: <b>{number(achievedUnits)}</b> / المستهدف:{" "}
+                    <b>{number(targetUnits)}</b> قطعة
                   </span>
                 </div>
                 <span className={`local-target-badge ${badgeStatus}`}>
@@ -1944,7 +2205,7 @@ function TargetsSection({
                   min="0"
                   placeholder="القطع المستهدفة"
                   value={value.quantity}
-                  onChange={(e) =>
+                  onChange={e =>
                     setValues({
                       ...values,
                       [gov.id]: { ...value, quantity: e.target.value },
@@ -1956,7 +2217,7 @@ function TargetsSection({
                   min="0"
                   placeholder="المبلغ (اختياري)"
                   value={value.amount}
-                  onChange={(e) =>
+                  onChange={e =>
                     setValues({
                       ...values,
                       [gov.id]: { ...value, amount: e.target.value },
@@ -1972,7 +2233,15 @@ function TargetsSection({
               >
                 {isSaving ? "جارٍ الحفظ..." : "حفظ هدف المحافظة"}
               </button>
-              {existing && <button type="button" className="local-plain-button" onClick={() => void removeTarget(existing)}>حذف الهدف</button>}
+              {existing && (
+                <button
+                  type="button"
+                  className="local-plain-button"
+                  onClick={() => void removeTarget(existing)}
+                >
+                  حذف الهدف
+                </button>
+              )}
             </div>
           );
         })}
@@ -2005,7 +2274,7 @@ function PeopleSection({
     username: "",
     password: "",
     governorateId: reference.governorates[0]?.id || "",
-    companyIds: reference.companies.map((item) => item.id),
+    companyIds: reference.companies.map(item => item.id),
   });
 
   const [usersList, setUsersList] = useState<User[]>([]);
@@ -2040,7 +2309,7 @@ function PeopleSection({
       governorateId: form.governorateId,
     };
 
-    setReference((prev) =>
+    setReference(prev =>
       prev
         ? {
             ...prev,
@@ -2055,14 +2324,17 @@ function PeopleSection({
     try {
       const res = await api<{ id: string }>("/representatives", {
         method: "POST",
-        body: JSON.stringify({ name: newName, governorateId: form.governorateId }),
+        body: JSON.stringify({
+          name: newName,
+          governorateId: form.governorateId,
+        }),
       });
       if (res?.id) {
-        setReference((prev) =>
+        setReference(prev =>
           prev
             ? {
                 ...prev,
-                representatives: prev.representatives.map((r) =>
+                representatives: prev.representatives.map(r =>
                   r.id === tempId ? { ...r, id: res.id } : r
                 ),
               }
@@ -2071,15 +2343,20 @@ function PeopleSection({
       }
       reload(true);
     } catch (err) {
-      setReference((prev) =>
+      setReference(prev =>
         prev
           ? {
               ...prev,
-              representatives: prev.representatives.filter((r) => r.id !== tempId),
+              representatives: prev.representatives.filter(
+                r => r.id !== tempId
+              ),
             }
           : null
       );
-      showToast(err instanceof Error ? err.message : "تعذر إضافة المندوب", "error");
+      showToast(
+        err instanceof Error ? err.message : "تعذر إضافة المندوب",
+        "error"
+      );
     }
   };
 
@@ -2090,13 +2367,13 @@ function PeopleSection({
     }
     setDeletingId(repId);
 
-    const deletedRep = reference.representatives.find((r) => r.id === repId);
+    const deletedRep = reference.representatives.find(r => r.id === repId);
 
-    setReference((prev) =>
+    setReference(prev =>
       prev
         ? {
             ...prev,
-            representatives: prev.representatives.filter((r) => r.id !== repId),
+            representatives: prev.representatives.filter(r => r.id !== repId),
           }
         : null
     );
@@ -2110,7 +2387,7 @@ function PeopleSection({
       reload(true);
     } catch (err) {
       if (deletedRep) {
-        setReference((prev) =>
+        setReference(prev =>
           prev
             ? {
                 ...prev,
@@ -2119,7 +2396,10 @@ function PeopleSection({
             : null
         );
       }
-      showToast(err instanceof Error ? err.message : "تعذر حذف المندوب", "error");
+      showToast(
+        err instanceof Error ? err.message : "تعذر حذف المندوب",
+        "error"
+      );
     } finally {
       setDeletingId(null);
     }
@@ -2143,13 +2423,18 @@ function PeopleSection({
       void loadUsers();
       reload(true);
     } catch (err) {
-      showToast(err instanceof Error ? err.message : "تعذر إنشاء المشرف", "error");
+      showToast(
+        err instanceof Error ? err.message : "تعذر إنشاء المشرف",
+        "error"
+      );
     }
   };
 
   // Reset Supervisor Password
   const resetPassword = async (userId: string, userName: string) => {
-    const newPass = window.prompt(`أدخل كلمة المرور الجديدة للمشرف (${userName}) - 6 أحرف كحد أدنى:`);
+    const newPass = window.prompt(
+      `أدخل كلمة المرور الجديدة للمشرف (${userName}) - 6 أحرف كحد أدنى:`
+    );
     if (!newPass) return;
     if (newPass.length < 6) {
       showToast("كلمة المرور يجب أن تكون 6 أحرف على الأقل", "error");
@@ -2162,13 +2447,17 @@ function PeopleSection({
       });
       showToast(`✓ تم تحديث كلمة المرور لـ "${userName}" بنجاح`);
     } catch (err) {
-      showToast(err instanceof Error ? err.message : "تعذر تحديث كلمة المرور", "error");
+      showToast(
+        err instanceof Error ? err.message : "تعذر تحديث كلمة المرور",
+        "error"
+      );
     }
   };
 
   const displayedReps = useMemo(() => {
-    return reference.representatives.filter((item) => {
-      const matchGov = filterGovId === "all" || item.governorateId === filterGovId;
+    return reference.representatives.filter(item => {
+      const matchGov =
+        filterGovId === "all" || item.governorateId === filterGovId;
       const matchSearch =
         !repSearch.trim() ||
         item.name.toLowerCase().includes(repSearch.toLowerCase().trim());
@@ -2196,7 +2485,7 @@ function PeopleSection({
           <Field label="اسم المشرف">
             <input
               value={supervisor.displayName}
-              onChange={(e) =>
+              onChange={e =>
                 setSupervisor({ ...supervisor, displayName: e.target.value })
               }
               placeholder="مثال: علي كريم"
@@ -2206,7 +2495,7 @@ function PeopleSection({
           <Field label="اسم المستخدم (Username)">
             <input
               value={supervisor.username}
-              onChange={(e) =>
+              onChange={e =>
                 setSupervisor({ ...supervisor, username: e.target.value })
               }
               placeholder="مثال: ali_basra"
@@ -2218,7 +2507,7 @@ function PeopleSection({
               type="password"
               minLength={6}
               value={supervisor.password}
-              onChange={(e) =>
+              onChange={e =>
                 setSupervisor({ ...supervisor, password: e.target.value })
               }
               placeholder="6 أحرف أو أرقام على الأقل"
@@ -2228,14 +2517,14 @@ function PeopleSection({
           <Field label="المحافظة التابع لها">
             <select
               value={supervisor.governorateId}
-              onChange={(e) =>
+              onChange={e =>
                 setSupervisor({
                   ...supervisor,
                   governorateId: e.target.value,
                 })
               }
             >
-              {reference.governorates.map((item) => (
+              {reference.governorates.map(item => (
                 <option key={item.id} value={item.id}>
                   {item.name}
                 </option>
@@ -2244,19 +2533,17 @@ function PeopleSection({
           </Field>
           <div className="local-company-checks">
             <span className="local-field-label">الشركات المسموحة:</span>
-            {reference.companies.map((company) => (
+            {reference.companies.map(company => (
               <label key={company.id}>
                 <input
                   type="checkbox"
                   checked={supervisor.companyIds.includes(company.id)}
-                  onChange={(e) =>
+                  onChange={e =>
                     setSupervisor({
                       ...supervisor,
                       companyIds: e.target.checked
                         ? [...supervisor.companyIds, company.id]
-                        : supervisor.companyIds.filter(
-                            (id) => id !== company.id
-                          ),
+                        : supervisor.companyIds.filter(id => id !== company.id),
                     })
                   }
                 />{" "}
@@ -2278,9 +2565,7 @@ function PeopleSection({
           <Field label="اسم المندوب">
             <input
               value={form.name}
-              onChange={(e) =>
-                setForm({ ...form, name: e.target.value })
-              }
+              onChange={e => setForm({ ...form, name: e.target.value })}
               placeholder="مثال: مندوب البصرة 1"
               required
             />
@@ -2288,11 +2573,11 @@ function PeopleSection({
           <Field label="المحافظة">
             <select
               value={form.governorateId}
-              onChange={(e) =>
+              onChange={e =>
                 setForm({ ...form, governorateId: e.target.value })
               }
             >
-              {reference.governorates.map((item) => (
+              {reference.governorates.map(item => (
                 <option key={item.id} value={item.id}>
                   {item.name}
                 </option>
@@ -2318,17 +2603,26 @@ function PeopleSection({
           </div>
 
           <div className="local-list">
-            {usersList.map((u) => {
-              const uGov = reference.governorates.find((g) => g.id === u.governorateId);
+            {usersList.map(u => {
+              const uGov = reference.governorates.find(
+                g => g.id === u.governorateId
+              );
               return (
                 <div className="local-list-row" key={u.id}>
                   <div>
-                    <strong>{u.displayName} (@{u.username})</strong>
+                    <strong>
+                      {u.displayName} (@{u.username})
+                    </strong>
                     <span>
-                      الدور: {u.role === "admin" ? "مدير النظام (Admin)" : `مشرف (${uGov?.name || "عام"})`}
+                      الدور:{" "}
+                      {u.role === "admin"
+                        ? "مدير النظام (Admin)"
+                        : `مشرف (${uGov?.name || "عام"})`}
                     </span>
                   </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <div
+                    style={{ display: "flex", alignItems: "center", gap: 8 }}
+                  >
                     <button
                       type="button"
                       onClick={() => void resetPassword(u.id, u.displayName)}
@@ -2369,7 +2663,7 @@ function PeopleSection({
               type="text"
               placeholder="بحث بالاسم..."
               value={repSearch}
-              onChange={(e) => setRepSearch(e.target.value)}
+              onChange={e => setRepSearch(e.target.value)}
               style={{
                 width: "100%",
                 height: 36,
@@ -2395,7 +2689,7 @@ function PeopleSection({
 
           <select
             value={filterGovId}
-            onChange={(e) => setFilterGovId(e.target.value)}
+            onChange={e => setFilterGovId(e.target.value)}
             style={{
               height: 36,
               padding: "0 10px",
@@ -2407,10 +2701,12 @@ function PeopleSection({
               cursor: "pointer",
             }}
           >
-            <option value="all">جميع المحافظات ({reference.representatives.length})</option>
-            {reference.governorates.map((gov) => {
+            <option value="all">
+              جميع المحافظات ({reference.representatives.length})
+            </option>
+            {reference.governorates.map(gov => {
               const count = reference.representatives.filter(
-                (r) => r.governorateId === gov.id
+                r => r.governorateId === gov.id
               ).length;
               return (
                 <option key={gov.id} value={gov.id}>
@@ -2423,9 +2719,9 @@ function PeopleSection({
       </div>
 
       <div className="local-list">
-        {displayedReps.map((item) => {
+        {displayedReps.map(item => {
           const gov = reference.governorates.find(
-            (g) => g.id === item.governorateId
+            g => g.id === item.governorateId
           );
           const isDeleting = deletingId === item.id;
           return (
@@ -2463,7 +2759,9 @@ function PeopleSection({
           );
         })}
         {!displayedReps.length && (
-          <div className="local-empty">لا يوجد مندوبون مطابقون لهذا التحديد.</div>
+          <div className="local-empty">
+            لا يوجد مندوبون مطابقون لهذا التحديد.
+          </div>
         )}
       </div>
     </section>
