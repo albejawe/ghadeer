@@ -12,10 +12,37 @@ export type StoredPushSubscription = {
   auth: string;
 };
 
+function resolveVapidSubject(value?: string) {
+  const fallback = "https://ghadeer-seven.vercel.app";
+  const candidate = value?.trim();
+  if (!candidate) return fallback;
+  try {
+    const parsed = new URL(candidate);
+    if (parsed.protocol === "https:") {
+      const host = parsed.hostname.toLowerCase();
+      return host && host !== "localhost" && !host.endsWith(".local")
+        ? candidate
+        : fallback;
+    }
+    if (parsed.protocol === "mailto:") {
+      const address = decodeURIComponent(parsed.pathname).toLowerCase();
+      const domain = address.split("@").pop() || "";
+      return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address) &&
+        domain !== "localhost" &&
+        !domain.endsWith(".local")
+        ? candidate
+        : fallback;
+    }
+  } catch {
+    // Apple rejects malformed VAPID subjects with 403 BadJwtToken.
+  }
+  return fallback;
+}
+
 function configuration() {
   const publicKey = process.env.PUSH_VAPID_PUBLIC_KEY;
   const privateKey = process.env.PUSH_VAPID_PRIVATE_KEY;
-  const subject = process.env.PUSH_VAPID_SUBJECT || "mailto:admin@ghadeer.local";
+  const subject = resolveVapidSubject(process.env.PUSH_VAPID_SUBJECT);
   if (!publicKey || !privateKey) return null;
   webpush.setVapidDetails(subject, publicKey, privateKey);
   return { publicKey };

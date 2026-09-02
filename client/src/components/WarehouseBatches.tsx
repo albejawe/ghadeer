@@ -1,4 +1,4 @@
-import { Check, Pencil, Plus, Trash2 } from "lucide-react";
+import { Check, Eye, PackageOpen, Pencil, Plus, Trash2, X } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 
 type Reference = {
@@ -69,6 +69,7 @@ export function WarehouseBatches({
   ]);
   const [busy, setBusy] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [detailBatch, setDetailBatch] = useState<Batch | null>(null);
 
   const load = async () => {
     try {
@@ -82,6 +83,19 @@ export function WarehouseBatches({
   useEffect(() => {
     void load();
   }, []);
+  useEffect(() => {
+    if (!detailBatch) return;
+    const previousOverflow = document.body.style.overflow;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setDetailBatch(null);
+    };
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [detailBatch]);
   const shownBatches = useMemo(
     () =>
       period === "all"
@@ -342,14 +356,23 @@ export function WarehouseBatches({
       <div className="local-list">
         {shownBatches.map(batch => (
           <article key={batch.id} className="local-list-row local-batch-record">
-            <div>
+            <div
+              className="local-batch-record-main"
+              role="button"
+              tabIndex={0}
+              onClick={() => setDetailBatch(batch)}
+              onKeyDown={event => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  setDetailBatch(batch);
+                }
+              }}
+            >
               <strong>
                 {batch.governorate} · {batch.saleDate}
               </strong>
               <span>
-                {batch.items
-                  .map(item => `${item.material} (${number(item.quantity)})`)
-                  .join("، ")}
+                {number(batch.items.length)} {batch.items.length === 1 ? "مادة" : "مواد"}
                 {batch.note ? ` · ${batch.note}` : ""}
                 {batch.createdByName ? ` · سجلها: ${batch.createdByName}` : ""}
               </span>
@@ -360,6 +383,13 @@ export function WarehouseBatches({
                 <br />
                 <small>{money(batch.totalAmount)}</small>
               </b>
+              <button
+                type="button"
+                className="local-detail-button"
+                onClick={() => setDetailBatch(batch)}
+              >
+                <Eye size={16} /> عرض التفاصيل
+              </button>
               <button
                 type="button"
                 className="local-plain-button"
@@ -383,6 +413,78 @@ export function WarehouseBatches({
           <div className="local-empty">لا توجد وجبات في الفترة المحددة.</div>
         )}
       </div>
+
+      {detailBatch && (
+        <div
+          className="local-batch-detail-backdrop"
+          onMouseDown={event => {
+            if (event.target === event.currentTarget) setDetailBatch(null);
+          }}
+        >
+          <section
+            className="local-batch-detail-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="warehouse-batch-detail-title"
+          >
+            <header className="local-batch-detail-head">
+              <div>
+                <span className="local-kicker">تفاصيل وجبة المذخر</span>
+                <h2 id="warehouse-batch-detail-title">{detailBatch.governorate}</h2>
+                <p>{detailBatch.saleDate}{detailBatch.createdByName ? ` · سجلها ${detailBatch.createdByName}` : ""}</p>
+              </div>
+              <button type="button" onClick={() => setDetailBatch(null)} aria-label="إغلاق التفاصيل">
+                <X size={20} />
+              </button>
+            </header>
+
+            <div className="local-batch-detail-summary">
+              <div><span>عدد المواد</span><strong>{number(detailBatch.items.length)}</strong></div>
+              <div><span>إجمالي القطع</span><strong>{number(detailBatch.totalQuantity)}</strong></div>
+              <div><span>إجمالي المبلغ</span><strong>{money(detailBatch.totalAmount)}</strong></div>
+            </div>
+
+            <div className="local-batch-detail-items">
+              {detailBatch.items.map((item, index) => (
+                <article key={`${detailBatch.id}-${item.materialId}-${index}`}>
+                  <span className="local-batch-detail-index">{number(index + 1)}</span>
+                  <div className="local-batch-detail-identity">
+                    <strong>{item.material}</strong>
+                    <small>{item.company}</small>
+                  </div>
+                  <dl>
+                    <div><dt>العدد</dt><dd>{number(item.quantity)} قطعة</dd></div>
+                    <div><dt>سعر القطعة</dt><dd>{money(item.unitPrice)}</dd></div>
+                    <div><dt>الإجمالي</dt><dd>{money(item.totalAmount)}</dd></div>
+                  </dl>
+                </article>
+              ))}
+            </div>
+
+            {detailBatch.note && (
+              <div className="local-batch-detail-note">
+                <PackageOpen size={17} />
+                <div><span>الملاحظة</span><strong>{detailBatch.note}</strong></div>
+              </div>
+            )}
+
+            <footer className="local-batch-detail-actions">
+              <button type="button" className="local-primary" onClick={() => setDetailBatch(null)}>إغلاق</button>
+              <button
+                type="button"
+                className="local-secondary"
+                onClick={() => {
+                  const batch = detailBatch;
+                  setDetailBatch(null);
+                  edit(batch);
+                }}
+              >
+                <Pencil size={15} /> تعديل الوجبة
+              </button>
+            </footer>
+          </section>
+        </div>
+      )}
     </section>
   );
 }

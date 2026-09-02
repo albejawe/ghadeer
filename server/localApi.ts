@@ -391,6 +391,8 @@ router.post("/sales/batch", async (req, res) => {
     const now = new Date().toISOString();
     const statements = [];
     const createdIds: string[] = [];
+    let batchTotalQuantity = 0;
+    let batchTotalAmount = 0;
 
     for (const item of items) {
       const matId = String(item.materialId || "");
@@ -405,6 +407,8 @@ router.post("/sales/batch", async (req, res) => {
       }
       const unitPrice = materialMap.get(matId) || 0;
       const totalAmount = qty * unitPrice;
+      batchTotalQuantity += qty;
+      batchTotalAmount += totalAmount;
       const saleId = randomUUID();
       createdIds.push(saleId);
 
@@ -433,7 +437,7 @@ router.post("/sales/batch", async (req, res) => {
 
     return res
       .status(201)
-      .json({ ok: true, count: createdIds.length, ids: createdIds });
+      .json({ ok: true, count: createdIds.length, ids: createdIds, totalQuantity: batchTotalQuantity, totalAmount: batchTotalAmount });
   } catch (err) {
     return res.status(400).json({ ok: false, error: "BATCH_CREATE_FAILED" });
   }

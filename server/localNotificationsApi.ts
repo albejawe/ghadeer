@@ -38,7 +38,7 @@ async function subscriptionsFor(userIds: string[]) {
 }
 
 async function dispatchPush(userIds: string[], payload: Record<string, unknown>) {
-  if (!isPushConfigured()) return;
+  if (!isPushConfigured()) throw new Error("PUSH_NOT_CONFIGURED");
   const subscriptions = await subscriptionsFor(userIds);
   const results = await Promise.allSettled(subscriptions.map((subscription) => sendPush(subscription, payload)));
   const expired = results.flatMap((result, index) => {
@@ -46,12 +46,68 @@ async function dispatchPush(userIds: string[], payload: Record<string, unknown>)
     return statusCode === 404 || statusCode === 410 ? [subscriptions[index].id] : [];
   });
   if (expired.length) await getTursoClient().batch(expired.map((id) => ({ sql: "DELETE FROM push_subscriptions WHERE id = ?", args: [id] })), "write");
+  const delivered = results.filter((result) => result.status === "fulfilled").length;
+  return { total: subscriptions.length, delivered, failed: results.length - delivered };
 }
 
-async function announceSupervisorSale(req: Request) {
+type AnnouncementResult = {
+  totalAmount?: unknown;
+  totalQuantity?: unknown;
+};
+
+const formatNumber = (value: number) => value.toLocaleString("en-US");
+
+async function persistAdminAnnouncement(
+  adminIds: string[],
+  title: string,
+  body: string,
+  kind: string,
+  tag: string
+) {
+  if (!adminIds.length) return;
+  const now = new Date().toISOString();
+  const db = getTursoClient();
+  await db.batch(adminIds.map((userId) => ({
+    sql: "INSERT INTO app_notifications (id, user_id, title, body, kind, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+    args: [randomUUID(), userId, title, body, kind, now],
+  })), "write");
+  const result = await dispatchPush(adminIds, { title, body, url: "/delegates", tag, badge: 1 });
+  if (result.failed)
+    console.warn(`[Push] ${result.failed} of ${result.total} notifications were rejected.`);
+}
+
+async function announceSale(req: Request, response: AnnouncementResult) {
   const actor = await getRequestUser(req);
-  if (!actor || actor.role !== "supervisor") return;
-  const governorateId = String(req.body?.governorateId || actor.governorateId || "");
+  if (!actor) return;
+  const governorateId = String(actor.role === "supervisor" ? actor.governorateId || "" : req.body?.governorateId || actor.governorateId || "");
+  if (!governorateId) return;
+  const db = getTursoClient();
+  await ensureNotifications();
+  const [governorates, representatives, companies, admins] = await db.batch([
+    { sql: "SELECT name FROM governorates WHERE id = ? LIMIT 1", args: [governorateId] },
+    { sql: "SELECT name FROM representatives WHERE id = ? LIMIT 1", args: [String(req.body?.representativeId || "")] },
+    { sql: "SELECT name FROM companies WHERE id = ? LIMIT 1", args: [String(req.body?.companyId || "")] },
+    { sql: "SELECT id FROM app_users WHERE role = 'admin' AND active = 1", args: [] },
+  ], "read");
+  const governorate = String(governorates.rows[0]?.name || "المحافظة المحددة");
+  const representative = String(representatives.rows[0]?.name || "المندوب المحدد");
+  const company = String(companies.rows[0]?.name || "الشركة المحددة");
+  const rawItems = Array.isArray(req.body?.items) ? req.body.items : [];
+  const materialCount = rawItems.length || 1;
+  const totalQuantity = Number(response.totalQuantity || (rawItems.length
+    ? rawItems.reduce((sum: number, item: { quantity?: unknown }) => sum + Number(item?.quantity || 0), 0)
+    : req.body?.quantity) || 0);
+  const totalAmount = Number(response.totalAmount || req.body?.totalAmount || 0);
+  const title = `بيع جديد · ${governorate}`;
+  const body = `${representative} · ${company} · ${formatNumber(materialCount)} ${materialCount === 1 ? "مادة" : "مواد"} · ${formatNumber(totalQuantity)} قطعة · ${formatNumber(totalAmount)} د.ع · بواسطة ${actor.displayName}`;
+  const adminIds = admins.rows.map((admin) => String(admin.id));
+  await persistAdminAnnouncement(adminIds, title, body, "sale", `sale-${Date.now()}`);
+}
+
+async function announceWarehouseBatch(req: Request, response: AnnouncementResult) {
+  const actor = await getRequestUser(req);
+  if (!actor) return;
+  const governorateId = String(actor.role === "supervisor" ? actor.governorateId || "" : req.body?.governorateId || actor.governorateId || "");
   if (!governorateId) return;
   const db = getTursoClient();
   await ensureNotifications();
@@ -60,18 +116,13 @@ async function announceSupervisorSale(req: Request) {
     { sql: "SELECT id FROM app_users WHERE role = 'admin' AND active = 1", args: [] },
   ], "read");
   const governorate = String(governorates.rows[0]?.name || "المحافظة المحددة");
-  const itemCount = Array.isArray(req.body?.items) ? req.body.items.length : 1;
-  const title = "تمت إضافة مبيعات جديدة";
-  const body = `تمت إضافة ${itemCount > 1 ? `${itemCount} مواد` : "مبيعات"} إلى ${governorate} بواسطة ${actor.displayName}.`;
-  const now = new Date().toISOString();
+  const materialCount = Array.isArray(req.body?.items) ? req.body.items.length : 0;
+  const totalQuantity = Number(response.totalQuantity || 0);
+  const totalAmount = Number(response.totalAmount || 0);
+  const title = `مبيعات مذخر جديدة · ${governorate}`;
+  const body = `${formatNumber(materialCount)} ${materialCount === 1 ? "مادة" : "مواد"} · ${formatNumber(totalQuantity)} قطعة · ${formatNumber(totalAmount)} د.ع · بواسطة ${actor.displayName}`;
   const adminIds = admins.rows.map((admin) => String(admin.id));
-  if (adminIds.length) {
-    await db.batch(adminIds.map((userId) => ({
-      sql: "INSERT INTO app_notifications (id, user_id, title, body, kind, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-      args: [randomUUID(), userId, title, body, "sale", now],
-    })), "write");
-    await dispatchPush(adminIds, { title, body, url: "/delegates", tag: `sale-${now}`, badge: 1 });
-  }
+  await persistAdminAnnouncement(adminIds, title, body, "warehouse_sale", `warehouse-${Date.now()}`);
 }
 
 async function requireAdmin(req: Request, res: Response) {
@@ -82,16 +133,23 @@ async function requireAdmin(req: Request, res: Response) {
 }
 
 export function registerLocalNotificationsApi(app: Application) {
-  app.use("/api/local/sales", ((req: Request, res: Response, next: () => void) => {
+  const attachAnnouncement = (
+    path: string,
+    announce: (req: Request, payload: AnnouncementResult) => Promise<void>
+  ) => app.use(path, ((req: Request, res: Response, next: () => void) => {
     const originalJson = res.json.bind(res);
-    res.json = ((payload: unknown) => {
-      const createsSales = req.method === "POST" && res.statusCode >= 200 && res.statusCode < 300;
-      if (!createsSales) return originalJson(payload);
-      void announceSupervisorSale(req).catch(() => undefined).finally(() => originalJson(payload));
+    res.json = ((payload: AnnouncementResult) => {
+      const createsRecord = req.method === "POST" && res.statusCode >= 200 && res.statusCode < 300;
+      if (!createsRecord) return originalJson(payload);
+      void announce(req, payload).catch((error) => {
+        console.error("[Push] Notification failed:", error instanceof Error ? error.message : "UNKNOWN_ERROR");
+      }).finally(() => originalJson(payload));
       return res;
     }) as typeof res.json;
     next();
   }));
+  attachAnnouncement("/api/local/sales", announceSale);
+  attachAnnouncement("/api/local/warehouse-batches", announceWarehouseBatch);
 
   router.get("/push/public-key", async (req, res) => {
     if (!(await requireAdmin(req, res))) return;
@@ -120,8 +178,10 @@ export function registerLocalNotificationsApi(app: Application) {
     try {
       await ensureNotifications();
       if (!isPushConfigured()) return res.status(503).json({ ok: false, error: "PUSH_NOT_CONFIGURED" });
-      await dispatchPush([user.id], { title: "إشعارات غدير مفعّلة", body: "سيصلك تنبيه هنا حتى عند إغلاق التطبيق.", url: "/delegates", tag: "ghadeer-push-test" });
-      return res.json({ ok: true });
+      const result = await dispatchPush([user.id], { title: "إشعارات غدير مفعّلة", body: "سيصلك تنبيه هنا حتى عند إغلاق التطبيق.", url: "/delegates", tag: "ghadeer-push-test" });
+      if (!result.total || !result.delivered)
+        return res.status(502).json({ ok: false, error: "PUSH_TEST_NOT_DELIVERED" });
+      return res.json({ ok: true, delivered: result.delivered });
     } catch { return res.status(503).json({ ok: false, error: "PUSH_TEST_FAILED" }); }
   });
 

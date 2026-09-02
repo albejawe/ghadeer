@@ -59,9 +59,9 @@ export function SaleNotifications() {
       let subscription = await registration.pushManager.getSubscription();
       if (!subscription) subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(keyResponse.publicKey) });
       await request("/push/subscribe", { method: "POST", body: JSON.stringify({ subscription: subscription.toJSON() }) });
+      await request("/push/test", { method: "POST" });
       setActivationNeeded(false);
       setPushState("ready");
-      await request("/push/test", { method: "POST" });
     } catch { setPushState("error"); }
   };
 
