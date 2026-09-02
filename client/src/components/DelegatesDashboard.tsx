@@ -62,11 +62,13 @@ export function DelegatesDashboard({
   reference,
   sales,
   warehouse,
+  batches,
   targets,
 }: {
   reference: Ref;
   sales: Sale[];
   warehouse: Legacy[];
+  batches: Batch[];
   targets: TargetRecord[];
 }) {
   const now = new Date();
@@ -84,13 +86,7 @@ export function DelegatesDashboard({
     representativeId: "",
     materialId: "",
   });
-  const [batches, setBatches] = useState<Batch[]>([]);
   const [monthlyTargets, setMonthlyTargets] = useState<TargetRecord[]>(targets);
-  useEffect(() => {
-    void api<{ batches: Batch[] }>("/warehouse-batches")
-      .then(data => setBatches(data.batches))
-      .catch(() => setBatches([]));
-  }, []);
   const prefix =
     period === "current" ? current : period === "previous" ? previous : month;
   useEffect(() => {
@@ -192,19 +188,15 @@ export function DelegatesDashboard({
           !filters.materialId
       )
       .reduce((sum, item) => sum + Number(item.amount || 0), 0);
-  const directUnits = warehouseUnits - repUnits;
-  const rank = (rows: { name: string; quantity: number; amount?: number }[]) =>
-    rows
-      .filter(row => row.quantity > 0)
-      .sort((a, b) => b.quantity - a.quantity)
-      .slice(0, 5);
+  const directUnits = Math.max(warehouseUnits - repUnits, 0);
+
   const rankAll = (
     rows: { name: string; quantity: number; amount?: number }[]
   ) =>
     rows
       .filter(row => row.quantity > 0)
       .sort((a, b) => b.quantity - a.quantity);
-  const repRanking = rank(
+  const repRanking = rankAll(
     Object.values(
       scopedSales.reduce<
         Record<string, { name: string; quantity: number; amount: number }>
@@ -217,20 +209,24 @@ export function DelegatesDashboard({
       }, {})
     )
   );
-  const materialMovement = new Map<
+  const representativeMovement = new Map<
     string,
     { name: string; quantity: number; amount: number }
   >();
   for (const sale of scopedSales) {
-    const current = materialMovement.get(sale.materialId) || {
+    const current = representativeMovement.get(sale.materialId) || {
       name: sale.material,
       quantity: 0,
       amount: 0,
     };
     current.quantity += sale.quantity;
     current.amount += sale.totalAmount;
-    materialMovement.set(sale.materialId, current);
+    representativeMovement.set(sale.materialId, current);
   }
+  const materialMovement = new Map<
+    string,
+    { name: string; quantity: number; amount: number }
+  >();
   for (const batch of scopedBatches)
     for (const item of batch.items) {
       const current = materialMovement.get(item.materialId) || {
@@ -242,8 +238,14 @@ export function DelegatesDashboard({
       current.amount += item.totalAmount;
       materialMovement.set(item.materialId, current);
     }
+  // A warehouse batch already includes representative sales. Use the
+  // representative movement only as a fallback for materials that have no
+  // warehouse breakdown, never add both and double-count the same pieces.
+  for (const [materialId, movement] of Array.from(representativeMovement))
+    if (!materialMovement.has(materialId))
+      materialMovement.set(materialId, movement);
   const materialRanking = rankAll(Array.from(materialMovement.values()));
-  const govRanking = rank(
+  const govRanking = rankAll(
     reference.governorates.map(gov => ({
       name: gov.name,
       quantity:
@@ -269,6 +271,19 @@ export function DelegatesDashboard({
                       item.governorateId === gov.id
                   )
                   .reduce((sum, item) => sum + item.quantity, 0)),
+      amount:
+        scopedBatches
+          .filter(batch => batch.governorateId === gov.id)
+          .reduce((sum, batch) => sum + batch.totalAmount, 0) +
+        (filters.companyId || filters.materialId
+          ? 0
+          : warehouse
+              .filter(
+                item =>
+                  (period === "all" || item.saleDate.startsWith(prefix)) &&
+                  item.governorateId === gov.id
+              )
+              .reduce((sum, item) => sum + Number(item.amount || 0), 0)),
     }))
   );
   const targetRows =
@@ -485,8 +500,8 @@ export function DelegatesDashboard({
       <div className="local-dashboard-grid">
         {" "}
         <Ranking title="أفضل المندوبين" rows={repRanking} />{" "}
-        <Ranking title="المواد الأكثر حركة" rows={materialRanking} />{" "}
         <Ranking title="المحافظات الأعلى" rows={govRanking} />{" "}
+        <Ranking title="المواد الأكثر حركة" rows={materialRanking} />{" "}
       </div>{" "}
       {period !== "all" && (
         <section className="local-target-board">
@@ -556,6 +571,7 @@ function Ranking({
   rows: { name: string; quantity: number; amount?: number }[];
 }) {
   const top = rows[0]?.quantity || 1;
+  const total = rows.reduce((sum, row) => sum + row.quantity, 0) || 1;
   return (
     <section className="local-ranking">
       {" "}
@@ -576,7 +592,9 @@ function Ranking({
           </span>{" "}
           <strong>
             {" "}
-            {number(row.quantity)} <small>قطعة</small>{" "}
+            {number(row.quantity)} <small>قطعة</small>
+            <small> · {((row.quantity / total) * 100).toFixed(1)}%</small>
+            {row.amount != null && <small> · {money(row.amount)}</small>}{" "}
           </strong>{" "}
         </div>
       ))}{" "}

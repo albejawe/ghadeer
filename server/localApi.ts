@@ -15,6 +15,15 @@ import {
 import { getTursoClient } from "./turso.js";
 
 const router = Router();
+
+// Authentication and reference responses must never be reused from a stale
+// PWA/browser cache. This also protects clients that were installed before the
+// dedicated /auth/status endpoint existed.
+router.use((_req, res, next) => {
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+  res.setHeader("Pragma", "no-cache");
+  next();
+});
 async function actor(req: Request, res: Response) {
   const user = await getRequestUser(req);
   if (!user) {
@@ -227,6 +236,10 @@ router.post("/sales", async (req, res) => {
           sql: "SELECT company_id AS companyId FROM user_companies WHERE user_id = ? AND company_id = ?",
           args: [user.id, String(input.companyId)],
         },
+        {
+          sql: "SELECT company_id AS companyId FROM representative_companies WHERE representative_id = ? AND company_id = ?",
+          args: [String(input.representativeId), String(input.companyId)],
+        },
       ],
       "read"
     );
@@ -243,7 +256,8 @@ router.post("/sales", async (req, res) => {
       material.companyId !== String(input.companyId) ||
       !checks[2].rows.length ||
       !checks[3].rows.length ||
-      (user.role !== "admin" && !checks[4].rows.length)
+      (user.role !== "admin" && !checks[4].rows.length) ||
+      !checks[5].rows.length
     ) {
       return res
         .status(400)
@@ -343,6 +357,10 @@ router.post("/sales/batch", async (req, res) => {
           sql: "SELECT company_id AS companyId FROM user_companies WHERE user_id = ? AND company_id = ?",
           args: [user.id, companyId],
         },
+        {
+          sql: "SELECT company_id AS companyId FROM representative_companies WHERE representative_id = ? AND company_id = ?",
+          args: [representativeId, companyId],
+        },
       ],
       "read"
     );
@@ -353,7 +371,8 @@ router.post("/sales/batch", async (req, res) => {
       rep.governorateId !== governorateId ||
       !checks[1].rows.length ||
       !checks[2].rows.length ||
-      (user.role !== "admin" && !checks[3].rows.length)
+      (user.role !== "admin" && !checks[3].rows.length) ||
+      !checks[4].rows.length
     ) {
       return res
         .status(400)
@@ -422,7 +441,18 @@ router.post("/sales/batch", async (req, res) => {
 
 router.get("/users", async (req, res) => {
   try {
-    if (!(await admin(req, res))) return;
+    const current = await getRequestUser(req);
+    // Backward compatibility for an old cached frontend: that build used a
+    // 401 from /users as a signal that the database was uninitialized. A safe
+    // empty response makes it show the login screen while exposing no users.
+    if (!current)
+      return res.json({
+        ok: true,
+        users: [],
+        initialized: (await countUsers()) > 0,
+      });
+    if (current.role !== "admin")
+      return res.status(403).json({ ok: false, error: "ADMIN_REQUIRED" });
     return res.json({ ok: true, users: await listUsers() });
   } catch {
     return res.status(503).json({ ok: false, error: "DATABASE_UNAVAILABLE" });

@@ -7,13 +7,13 @@ describe("invoice exports", () => {
   it("builds an Excel-compatible RTL HTML workbook and escapes cell values", () => {
     const html = buildExcelHtml([invoice]);
     expect(html).toContain('dir="rtl"');
-    expect(html).toContain("تقرير الفواتير - حساباتي");
+    expect(html).toContain("تقرير الفواتير - نظام غدير المحاسبي");
     expect(html).toContain("شركة &amp;");
     expect(html).toContain("INV-1");
     expect(html).toContain("<table>");
   });
 
   it("provides a stable Arabic PDF print title", () => {
-    expect(buildPrintTitle()).toBe("تقرير الفواتير - حساباتي");
+    expect(buildPrintTitle()).toBe("تقرير الفواتير - نظام غدير المحاسبي");
   });
 });

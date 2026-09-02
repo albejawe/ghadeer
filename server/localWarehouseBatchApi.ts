@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { Router, type Application } from "express";
 import { getRequestUser } from "./localDb.js";
+import { currentUser, type V2User } from "./localV2Utils.js";
 import { getTursoClient } from "./turso.js";
 
 const router = Router();
@@ -8,6 +9,29 @@ const router = Router();
 async function admin(req: Parameters<typeof getRequestUser>[0]) {
   const user = await getRequestUser(req);
   return user?.role === "admin" ? user : null;
+}
+
+async function warehouseActor(req: Parameters<typeof getRequestUser>[0]) {
+  const user = await currentUser(req);
+  return user && (user.role === "admin" || user.canEnterWarehouse) ? user : null;
+}
+
+async function canManageBatch(id: string, user: V2User) {
+  const db = getTursoClient();
+  if (user.role === "admin") {
+    const found = await db.execute({
+      sql: "SELECT id FROM warehouse_sale_batches WHERE id = ?",
+      args: [id],
+    });
+    return found.rows.length > 0;
+  }
+  if (!user.governorateId || !user.companyIds.length) return false;
+  const placeholders = user.companyIds.map(() => "?").join(",");
+  const found = await db.execute({
+    sql: `SELECT b.id FROM warehouse_sale_batches b WHERE b.id = ? AND b.created_by = ? AND b.governorate_id = ? AND NOT EXISTS (SELECT 1 FROM warehouse_sale_items i JOIN materials m ON m.id = i.material_id WHERE i.batch_id = b.id AND m.company_id NOT IN (${placeholders}))`,
+    args: [id, user.id, user.governorateId, ...user.companyIds],
+  });
+  return found.rows.length > 0;
 }
 
 async function ensureSchema() {
@@ -40,7 +64,10 @@ function validDate(value: string) {
   return /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(value));
 }
 
-async function validateItems(raw: unknown): Promise<Item[] | null> {
+async function validateItems(
+  raw: unknown,
+  allowedCompanyIds?: string[]
+): Promise<Item[] | null> {
   if (!Array.isArray(raw) || !raw.length) return null;
   const merged = new Map<string, number>();
   for (const item of raw) {
@@ -57,9 +84,15 @@ async function validateItems(raw: unknown): Promise<Item[] | null> {
     quantity,
   }));
   const placeholders = items.map(() => "?").join(",");
+  const companyFilter = allowedCompanyIds
+    ? ` AND company_id IN (${allowedCompanyIds.map(() => "?").join(",") || "''"})`
+    : "";
   const result = await getTursoClient().execute({
-    sql: `SELECT id FROM materials WHERE active = 1 AND id IN (${placeholders})`,
-    args: items.map(item => item.materialId),
+    sql: `SELECT id FROM materials WHERE active = 1 AND id IN (${placeholders})${companyFilter}`,
+    args: [
+      ...items.map(item => item.materialId),
+      ...(allowedCompanyIds || []),
+    ],
   });
   return result.rows.length === items.length ? items : null;
 }
@@ -67,7 +100,8 @@ async function validateItems(raw: unknown): Promise<Item[] | null> {
 async function saveBatch(
   userId: string,
   body: Record<string, unknown>,
-  id: string = randomUUID()
+  id: string = randomUUID(),
+  allowedCompanyIds?: string[]
 ) {
   await ensureSchema();
   const governorateId = String(body.governorateId || "");
@@ -75,7 +109,7 @@ async function saveBatch(
   const note = String(body.note || "")
     .trim()
     .slice(0, 500);
-  const items = await validateItems(body.items);
+  const items = await validateItems(body.items, allowedCompanyIds);
   if (!governorateId || !validDate(saleDate) || !items) return null;
   const [year, month] = saleDate.split("-").map(Number);
   const ids = items.map(item => item.materialId);
@@ -143,13 +177,18 @@ async function saveBatch(
 
 router.get("/warehouse-batches", async (req, res) => {
   try {
-    const user = await admin(req);
+    const user = await warehouseActor(req);
     if (!user)
-      return res.status(403).json({ ok: false, error: "ADMIN_REQUIRED" });
+      return res
+        .status(403)
+        .json({ ok: false, error: "WAREHOUSE_PERMISSION_REQUIRED" });
     await ensureSchema();
-    const rows = await getTursoClient().execute(
-      "SELECT b.id, b.governorate_id AS governorateId, g.name AS governorate, b.sale_date AS saleDate, b.year, b.month, b.total_quantity AS totalQuantity, b.total_amount AS totalAmount, b.note, u.display_name AS createdByName, b.created_at AS createdAt, b.updated_at AS updatedAt, i.id AS itemId, i.material_id AS materialId, m.name AS material, c.name AS company, i.quantity, i.unit_price AS unitPrice, i.total_amount AS itemTotal FROM warehouse_sale_batches b JOIN governorates g ON g.id = b.governorate_id JOIN app_users u ON u.id = b.created_by JOIN warehouse_sale_items i ON i.batch_id = b.id JOIN materials m ON m.id = i.material_id JOIN companies c ON c.id = m.company_id ORDER BY b.sale_date DESC, b.created_at DESC"
-    );
+    const restricted = user.role !== "admin";
+    const companyPlaceholders = user.companyIds.map(() => "?").join(",") || "''";
+    const rows = await getTursoClient().execute({
+      sql: `SELECT b.id, b.governorate_id AS governorateId, g.name AS governorate, b.sale_date AS saleDate, b.year, b.month, b.total_quantity AS totalQuantity, b.total_amount AS totalAmount, b.note, u.display_name AS createdByName, b.created_at AS createdAt, b.updated_at AS updatedAt, i.id AS itemId, i.material_id AS materialId, m.name AS material, c.name AS company, i.quantity, i.unit_price AS unitPrice, i.total_amount AS itemTotal FROM warehouse_sale_batches b JOIN governorates g ON g.id = b.governorate_id JOIN app_users u ON u.id = b.created_by JOIN warehouse_sale_items i ON i.batch_id = b.id JOIN materials m ON m.id = i.material_id JOIN companies c ON c.id = m.company_id ${restricted ? `WHERE b.created_by = ? AND b.governorate_id = ? AND c.id IN (${companyPlaceholders})` : ""} ORDER BY b.sale_date DESC, b.created_at DESC`,
+      args: restricted ? [user.id, user.governorateId || "", ...user.companyIds] : [],
+    });
     const batches = new Map<string, Record<string, unknown>>();
     for (const row of rows.rows) {
       const id = String(row.id);
@@ -161,15 +200,16 @@ router.get("/warehouse-batches", async (req, res) => {
           saleDate: row.saleDate,
           year: row.year,
           month: row.month,
-          totalQuantity: row.totalQuantity,
-          totalAmount: row.totalAmount,
+          totalQuantity: restricted ? 0 : row.totalQuantity,
+          totalAmount: restricted ? 0 : row.totalAmount,
           note: row.note,
           createdByName: row.createdByName,
           createdAt: row.createdAt,
           updatedAt: row.updatedAt,
           items: [],
         });
-      (batches.get(id)?.items as unknown[]).push({
+      const batch = batches.get(id);
+      (batch?.items as unknown[]).push({
         id: row.itemId,
         materialId: row.materialId,
         material: row.material,
@@ -178,6 +218,10 @@ router.get("/warehouse-batches", async (req, res) => {
         unitPrice: row.unitPrice,
         totalAmount: row.itemTotal,
       });
+      if (restricted && batch) {
+        batch.totalQuantity = Number(batch.totalQuantity || 0) + Number(row.quantity || 0);
+        batch.totalAmount = Number(batch.totalAmount || 0) + Number(row.itemTotal || 0);
+      }
     }
     return res.json({ ok: true, batches: Array.from(batches.values()) });
   } catch {
@@ -187,10 +231,23 @@ router.get("/warehouse-batches", async (req, res) => {
 
 router.post("/warehouse-batches", async (req, res) => {
   try {
-    const user = await admin(req);
+    const user = await warehouseActor(req);
     if (!user)
-      return res.status(403).json({ ok: false, error: "ADMIN_REQUIRED" });
-    const saved = await saveBatch(user.id, req.body || {});
+      return res
+        .status(403)
+        .json({ ok: false, error: "WAREHOUSE_PERMISSION_REQUIRED" });
+    const saved = await saveBatch(
+      user.id,
+      {
+        ...(req.body || {}),
+        governorateId:
+          user.role === "admin"
+            ? req.body?.governorateId
+            : user.governorateId,
+      },
+      randomUUID(),
+      user.role === "admin" ? undefined : user.companyIds
+    );
     if (!saved)
       return res
         .status(400)
@@ -205,14 +262,23 @@ router.post("/warehouse-batches", async (req, res) => {
 
 router.patch("/warehouse-batches/:id", async (req, res) => {
   try {
-    const user = await admin(req);
+    const user = await warehouseActor(req);
     if (!user)
-      return res.status(403).json({ ok: false, error: "ADMIN_REQUIRED" });
+      return res
+        .status(403)
+        .json({ ok: false, error: "WAREHOUSE_PERMISSION_REQUIRED" });
     const id = String(req.params.id || "");
     if (!id) return res.status(400).json({ ok: false, error: "INVALID_ID" });
     await ensureSchema();
-    const preflight = req.body || {};
-    const items = await validateItems(preflight.items);
+    const preflight = {
+      ...(req.body || {}),
+      governorateId:
+        user.role === "admin" ? req.body?.governorateId : user.governorateId,
+    };
+    const items = await validateItems(
+      preflight.items,
+      user.role === "admin" ? undefined : user.companyIds
+    );
     if (
       !String(preflight.governorateId || "") ||
       !validDate(String(preflight.saleDate || "").trim()) ||
@@ -222,11 +288,7 @@ router.patch("/warehouse-batches/:id", async (req, res) => {
         .status(400)
         .json({ ok: false, error: "INVALID_WAREHOUSE_BATCH" });
     const db = getTursoClient();
-    const found = await db.execute({
-      sql: "SELECT id FROM warehouse_sale_batches WHERE id = ?",
-      args: [id],
-    });
-    if (!found.rows.length)
+    if (!(await canManageBatch(id, user)))
       return res
         .status(404)
         .json({ ok: false, error: "WAREHOUSE_BATCH_NOT_FOUND" });
@@ -313,11 +375,17 @@ router.patch("/warehouse-batches/:id", async (req, res) => {
 
 router.delete("/warehouse-batches/:id", async (req, res) => {
   try {
-    const user = await admin(req);
+    const user = await warehouseActor(req);
     if (!user)
-      return res.status(403).json({ ok: false, error: "ADMIN_REQUIRED" });
+      return res
+        .status(403)
+        .json({ ok: false, error: "WAREHOUSE_PERMISSION_REQUIRED" });
     const id = String(req.params.id || "");
     await ensureSchema();
+    if (!(await canManageBatch(id, user)))
+      return res
+        .status(404)
+        .json({ ok: false, error: "WAREHOUSE_BATCH_NOT_FOUND" });
     await getTursoClient().batch(
       [
         {

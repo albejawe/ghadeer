@@ -48,10 +48,14 @@ export function WarehouseBatches({
   reference,
   showToast,
   reload,
+  period,
+  periodPrefix,
 }: {
   reference: Reference;
   showToast: (message: string, type?: "success" | "error" | "info") => void;
   reload: (silent?: boolean) => void;
+  period: "current" | "previous" | "all" | "custom";
+  periodPrefix: string;
 }) {
   const today = new Date().toISOString().slice(0, 10);
   const [batches, setBatches] = useState<Batch[]>([]);
@@ -78,6 +82,13 @@ export function WarehouseBatches({
   useEffect(() => {
     void load();
   }, []);
+  const shownBatches = useMemo(
+    () =>
+      period === "all"
+        ? batches
+        : batches.filter(batch => batch.saleDate.startsWith(periodPrefix)),
+    [batches, period, periodPrefix]
+  );
   const selected = useMemo(
     () =>
       items
@@ -325,11 +336,11 @@ export function WarehouseBatches({
       <div className="local-section-head compact">
         <div>
           <h2>الوجبات المسجلة</h2>
-          <p>{batches.length} وجبة · يمكن تعديلها أو حذفها.</p>
+          <p>{shownBatches.length} وجبة في الفترة المحددة · يمكن تعديلها أو حذفها.</p>
         </div>
       </div>
       <div className="local-list">
-        {batches.map(batch => (
+        {shownBatches.map(batch => (
           <article key={batch.id} className="local-list-row local-batch-record">
             <div>
               <strong>
@@ -340,6 +351,7 @@ export function WarehouseBatches({
                   .map(item => `${item.material} (${number(item.quantity)})`)
                   .join("، ")}
                 {batch.note ? ` · ${batch.note}` : ""}
+                {batch.createdByName ? ` · سجلها: ${batch.createdByName}` : ""}
               </span>
             </div>
             <div className="local-history-row-actions">
@@ -367,8 +379,8 @@ export function WarehouseBatches({
             </div>
           </article>
         ))}
-        {!batches.length && (
-          <div className="local-empty">لم تسجّل أي وجبة مواد بعد.</div>
+        {!shownBatches.length && (
+          <div className="local-empty">لا توجد وجبات في الفترة المحددة.</div>
         )}
       </div>
     </section>

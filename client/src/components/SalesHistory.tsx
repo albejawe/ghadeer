@@ -13,8 +13,35 @@ type Sale = {
   company: string;
   material: string;
 };
+type WarehouseBatch = {
+  id: string;
+  saleDate: string;
+  governorate: string;
+  totalQuantity: number;
+  totalAmount: number;
+  note: string;
+  createdByName?: string;
+  items: {
+    material: string;
+    company: string;
+    quantity: number;
+    unitPrice: number;
+    totalAmount: number;
+  }[];
+};
+type LegacyWarehouse = {
+  id: string;
+  saleDate: string;
+  governorate: string;
+  quantity: number;
+  amount: number | null;
+  note?: string;
+  createdByName: string;
+};
+
 const number = (value: number) => value.toLocaleString("en-US");
 const money = (value: number) => `${number(value)} د.ع`;
+
 async function api(path: string, init?: RequestInit) {
   const response = await fetch(`/api/local${path}`, {
     ...init,
@@ -27,12 +54,16 @@ async function api(path: string, init?: RequestInit) {
 
 export function SalesHistory({
   sales,
-  warehouseUnits,
+  warehouseBatches,
+  legacyWarehouse,
+  periodLabel,
   onRefresh,
   onMessage,
 }: {
   sales: Sale[];
-  warehouseUnits: number;
+  warehouseBatches: WarehouseBatch[];
+  legacyWarehouse: LegacyWarehouse[];
+  periodLabel: string;
   onRefresh: () => void;
   onMessage: (text: string, type?: "success" | "error" | "info") => void;
 }) {
@@ -45,17 +76,34 @@ export function SalesHistory({
   });
   const [editing, setEditing] = useState<Sale | null>(null);
   const [saving, setSaving] = useState(false);
+
   const options = useMemo(
     () => ({
-      governorates: Array.from(new Set(sales.map(sale => sale.governorate))),
+      governorates: Array.from(
+        new Set([
+          ...sales.map(sale => sale.governorate),
+          ...warehouseBatches.map(batch => batch.governorate),
+          ...legacyWarehouse.map(item => item.governorate),
+        ])
+      ).filter(Boolean),
       representatives: Array.from(
         new Set(sales.map(sale => sale.representative))
+      ).filter(Boolean),
+      supervisors: Array.from(new Set(sales.map(sale => sale.supervisor))).filter(
+        Boolean
       ),
-      supervisors: Array.from(new Set(sales.map(sale => sale.supervisor))),
-      materials: Array.from(new Set(sales.map(sale => sale.material))),
+      materials: Array.from(
+        new Set([
+          ...sales.map(sale => sale.material),
+          ...warehouseBatches.flatMap(batch =>
+            batch.items.map(item => item.material)
+          ),
+        ])
+      ).filter(Boolean),
     }),
-    [sales]
+    [sales, warehouseBatches, legacyWarehouse]
   );
+
   const filtered = useMemo(
     () =>
       sales.filter(sale => {
@@ -64,6 +112,7 @@ export function SalesHistory({
           (!needle ||
             [
               sale.material,
+              sale.company,
               sale.representative,
               sale.governorate,
               sale.supervisor,
@@ -78,22 +127,83 @@ export function SalesHistory({
       }),
     [sales, query, filters]
   );
+
+  const filteredBatches = useMemo(
+    () =>
+      warehouseBatches
+        .filter(batch => {
+          const needle = query.trim().toLowerCase();
+          return (
+            (!filters.governorate ||
+              batch.governorate === filters.governorate) &&
+            (!needle ||
+              [
+                batch.governorate,
+                batch.saleDate,
+                batch.note,
+                batch.createdByName || "",
+                ...batch.items.flatMap(item => [item.material, item.company]),
+              ].some(value => value.toLowerCase().includes(needle)))
+          );
+        })
+        .map(batch => ({
+          ...batch,
+          items: batch.items.filter(
+            item => !filters.material || item.material === filters.material
+          ),
+        }))
+        .filter(batch => batch.items.length),
+    [warehouseBatches, query, filters.governorate, filters.material]
+  );
+
+  const filteredLegacy = useMemo(
+    () =>
+      legacyWarehouse.filter(item => {
+        const needle = query.trim().toLowerCase();
+        return (
+          !filters.material &&
+          (!filters.governorate || item.governorate === filters.governorate) &&
+          (!needle ||
+            [item.governorate, item.saleDate, item.note || "", item.createdByName]
+              .join(" ")
+              .toLowerCase()
+              .includes(needle))
+        );
+      }),
+    [legacyWarehouse, query, filters.governorate, filters.material]
+  );
+
   const filteredUnits = filtered.reduce((sum, sale) => sum + sale.quantity, 0);
   const filteredAmount = filtered.reduce(
     (sum, sale) => sum + sale.totalAmount,
     0
   );
+  const warehouseUnits =
+    filteredBatches.reduce(
+      (sum, batch) =>
+        sum + batch.items.reduce((itemSum, item) => itemSum + item.quantity, 0),
+      0
+    ) + filteredLegacy.reduce((sum, item) => sum + item.quantity, 0);
+  const warehouseAmount =
+    filteredBatches.reduce(
+      (sum, batch) =>
+        sum +
+        batch.items.reduce((itemSum, item) => itemSum + item.totalAmount, 0),
+      0
+    ) +
+    filteredLegacy.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+  const directUnits = Math.max(warehouseUnits - filteredUnits, 0);
+
   const exportReport = () => {
-    if (!filtered.length) return onMessage("لا توجد مبيعات لتصديرها", "info");
-    const units = filtered.reduce((sum, sale) => sum + sale.quantity, 0);
-    const amount = filtered.reduce((sum, sale) => sum + sale.totalAmount, 0);
-    const rows = [
-      ["تقرير إدخالات المبيعات"],
-      ["إجمالي المذخر", number(warehouseUnits)],
-      ["مبيعات المندوبين", number(units)],
-      ["صافي المذخر المباشر", number(warehouseUnits - units)],
-      ["مبالغ المندوبين", amount],
+    if (!filtered.length && !filteredBatches.length && !filteredLegacy.length)
+      return onMessage("لا توجد بيانات لتصديرها", "info");
+    const rows: Array<Array<string | number>> = [
+      ["تقرير مبيعات غدير", periodLabel],
+      ["إجمالي خروج المذخر", warehouseUnits, warehouseAmount],
+      ["مبيعات المندوبين", filteredUnits, filteredAmount],
+      ["صافي البيع المباشر", directUnits],
       [],
+      ["مبيعات المندوبين"],
       [
         "التاريخ",
         "المحافظة",
@@ -116,6 +226,43 @@ export function SalesHistory({
         sale.totalAmount,
         sale.supervisor,
       ]),
+      [],
+      ["مبيعات المذاخر"],
+      [
+        "التاريخ",
+        "المحافظة",
+        "الشركة",
+        "المادة",
+        "القطع",
+        "سعر القطعة",
+        "الإجمالي",
+        "أنشأها",
+        "الملاحظة",
+      ],
+      ...filteredBatches.flatMap(batch =>
+        batch.items.map(item => [
+          batch.saleDate,
+          batch.governorate,
+          item.company,
+          item.material,
+          item.quantity,
+          item.unitPrice,
+          item.totalAmount,
+          batch.createdByName || "",
+          batch.note || "",
+        ])
+      ),
+      ...filteredLegacy.map(item => [
+        item.saleDate,
+        item.governorate,
+        "",
+        "إدخال قديم بلا تفاصيل مواد",
+        item.quantity,
+        "",
+        Number(item.amount || 0),
+        item.createdByName,
+        item.note || "",
+      ]),
     ];
     const csv = rows
       .map(row =>
@@ -127,10 +274,11 @@ export function SalesHistory({
     );
     const link = document.createElement("a");
     link.href = url;
-    link.download = "ghadeer-sales-report.csv";
+    link.download = `ghadeer-sales-${periodLabel.replaceAll(" ", "-")}.csv`;
     link.click();
     URL.revokeObjectURL(url);
   };
+
   const saveEdit = async () => {
     if (
       !editing ||
@@ -157,6 +305,7 @@ export function SalesHistory({
       setSaving(false);
     }
   };
+
   const remove = async (sale: Sale) => {
     if (!window.confirm(`حذف مبيعات ${sale.material}؟`)) return;
     try {
@@ -167,41 +316,46 @@ export function SalesHistory({
       onMessage("تعذر حذف الإدخال", "error");
     }
   };
+
   return (
     <section className="local-content local-history">
       <div className="local-section-head compact">
         <div>
-          <span className="local-kicker">سجل مفصل</span>
-          <h2>جميع الإدخالات ({filtered.length})</h2>
-          <p>ابحث، فلتر، عدّل، احذف أو صدّر التقرير.</p>
+          <span className="local-kicker">سجل مفصل · {periodLabel}</span>
+          <h2>جميع الإدخالات ({number(filtered.length)})</h2>
+          <p>الفترة والفلاتر تغيّر الأرقام والقوائم والتقرير معاً.</p>
         </div>
-        <button
-          type="button"
-          className="local-secondary"
-          onClick={exportReport}
-        >
+        <button type="button" className="local-secondary" onClick={exportReport}>
           <Download size={14} /> تصدير التقرير
         </button>
       </div>
+
       <div className="local-history-summary">
+        <div>
+          <span>إجمالي المذخر</span>
+          <strong>{number(warehouseUnits)} قطعة</strong>
+          <small>{money(warehouseAmount)}</small>
+        </div>
+        <div>
+          <span>مبيعات المندوبين</span>
+          <strong>{number(filteredUnits)} قطعة</strong>
+          <small>{money(filteredAmount)}</small>
+        </div>
+        <div>
+          <span>البيع المباشر</span>
+          <strong>{number(directUnits)} قطعة</strong>
+        </div>
         <div>
           <span>الإدخالات المطابقة</span>
           <strong>{number(filtered.length)}</strong>
         </div>
-        <div>
-          <span>القطع</span>
-          <strong>{number(filteredUnits)}</strong>
-        </div>
-        <div>
-          <span>المبلغ</span>
-          <strong>{money(filteredAmount)}</strong>
-        </div>
       </div>
+
       <div className="local-history-filters">
         <input
           value={query}
           onChange={event => setQuery(event.target.value)}
-          placeholder="بحث في الإدخالات"
+          placeholder="بحث في كل الإدخالات"
         />
         {(
           ["governorate", "representative", "supervisor", "material"] as const
@@ -230,6 +384,13 @@ export function SalesHistory({
             ))}
           </select>
         ))}
+      </div>
+
+      <div className="local-section-head compact">
+        <div>
+          <h2>مبيعات المندوبين</h2>
+          <p>{number(filteredUnits)} قطعة ضمن التحديد الحالي.</p>
+        </div>
       </div>
       <div className="local-list">
         {filtered.map(sale => (
@@ -276,8 +437,8 @@ export function SalesHistory({
                 <div>
                   <strong>{sale.material}</strong>
                   <span>
-                    {sale.representative} · {sale.governorate} · {sale.saleDate}{" "}
-                    · {sale.supervisor}
+                    {sale.representative} · {sale.governorate} · {sale.saleDate} ·{" "}
+                    {sale.supervisor}
                   </span>
                 </div>
                 <div className="local-history-row-actions">
@@ -308,7 +469,47 @@ export function SalesHistory({
           </article>
         ))}
         {!filtered.length && (
-          <div className="local-empty">لا توجد إدخالات مطابقة.</div>
+          <div className="local-empty">لا توجد مبيعات مندوبين مطابقة.</div>
+        )}
+      </div>
+
+      <div className="local-section-head compact">
+        <div>
+          <h2>مبيعات المذاخر</h2>
+          <p>{number(warehouseUnits)} قطعة ضمن التحديد الحالي.</p>
+        </div>
+      </div>
+      <div className="local-list">
+        {filteredBatches.map(batch => (
+          <article className="local-list-row" key={batch.id}>
+            <div>
+              <strong>{batch.governorate} · {batch.saleDate}</strong>
+              <span>
+                {batch.items
+                  .map(item => `${item.material} (${number(item.quantity)})`)
+                  .join("، ")}
+                {batch.createdByName ? ` · سجلها: ${batch.createdByName}` : ""}
+              </span>
+            </div>
+            <b>
+              {number(
+                batch.items.reduce((sum, item) => sum + item.quantity, 0)
+              )}{" "}
+              قطعة
+            </b>
+          </article>
+        ))}
+        {filteredLegacy.map(item => (
+          <article className="local-list-row" key={item.id}>
+            <div>
+              <strong>{item.governorate} · {item.saleDate}</strong>
+              <span>إدخال قديم بلا تفاصيل مواد · سجلها: {item.createdByName}</span>
+            </div>
+            <b>{number(item.quantity)} قطعة</b>
+          </article>
+        ))}
+        {!filteredBatches.length && !filteredLegacy.length && (
+          <div className="local-empty">لا توجد مبيعات مذاخر مطابقة.</div>
         )}
       </div>
     </section>

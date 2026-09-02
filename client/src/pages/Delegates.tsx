@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   BarChart3,
+  Building2,
   Check,
   ClipboardList,
   Download,
@@ -26,6 +27,7 @@ import { SalesHistory } from "../components/SalesHistory";
 import { WarehouseBatches } from "../components/WarehouseBatches";
 import { InventorySection } from "../components/InventorySection";
 import { DelegatesDashboard } from "../components/DelegatesDashboard";
+import { CatalogSection } from "../components/CatalogSection";
 import "./delegates.css";
 
 // =========================================================================
@@ -39,6 +41,8 @@ type User = {
   role: "admin" | "supervisor";
   governorateId: string | null;
   active: boolean;
+  canEnterWarehouse?: boolean;
+  companyIds?: string[];
 };
 
 type Governorate = { id: string; name: string };
@@ -50,7 +54,12 @@ type Material = {
   companyId: string;
   company: string;
 };
-type Representative = { id: string; name: string; governorateId: string };
+type Representative = {
+  id: string;
+  name: string;
+  governorateId: string;
+  companyIds: string[];
+};
 type Sale = {
   id: string;
   saleDate: string;
@@ -78,6 +87,27 @@ type WarehouseSale = {
   note?: string;
   createdByName: string;
 };
+type WarehouseBatch = {
+  id: string;
+  governorateId: string;
+  governorate: string;
+  saleDate: string;
+  year: number;
+  month: number;
+  totalQuantity: number;
+  totalAmount: number;
+  note: string;
+  createdByName?: string;
+  items: {
+    materialId: string;
+    material: string;
+    company: string;
+    quantity: number;
+    unitPrice: number;
+    totalAmount: number;
+  }[];
+};
+
 type TargetRecord = {
   id: string;
   governorateId: string;
@@ -432,6 +462,7 @@ export default function Delegates() {
   const [reference, setReference] = useState<Reference | null>(null);
   const [sales, setSales] = useState<Sale[]>([]);
   const [warehouse, setWarehouse] = useState<WarehouseSale[]>([]);
+  const [warehouseBatches, setWarehouseBatches] = useState<WarehouseBatch[]>([]);
   const [targets, setTargets] = useState<TargetRecord[]>([]);
   const [section, setSection] = useState<
     | "dashboard"
@@ -439,6 +470,7 @@ export default function Delegates() {
     | "history"
     | "warehouse"
     | "inventory"
+    | "catalog"
     | "targets"
     | "people"
   >("dashboard");
@@ -481,17 +513,23 @@ export default function Delegates() {
       const currentYear = new Date().getFullYear();
       const currentMonth = new Date().getMonth() + 1;
 
-      const [ref, saleData, warehouseData, targetData] = await Promise.all([
-        api<Reference>("/reference"),
-        api<{ sales: Sale[] }>("/sales"),
-        api<{ sales: WarehouseSale[] }>("/warehouse-sales"),
-        api<{ targets: TargetRecord[] }>(
-          `/targets?year=${currentYear}&month=${currentMonth}`
-        ),
-      ]);
+      const [ref, saleData, warehouseData, batchData, targetData] =
+        await Promise.all([
+          api<Reference>("/v2/reference"),
+          api<{ sales: Sale[] }>("/sales"),
+          api<{ sales: WarehouseSale[] }>("/warehouse-sales"),
+          api<{ batches: WarehouseBatch[] }>("/warehouse-batches").catch(() => ({
+            batches: [],
+          })),
+          api<{ targets: TargetRecord[] }>(
+            `/targets?year=${currentYear}&month=${currentMonth}`
+          ),
+        ]);
+      setUser(ref.user);
       setReference(ref);
       setSales(saleData.sales);
       setWarehouse(warehouseData.sales);
+      setWarehouseBatches(batchData.batches);
       setTargets(targetData.targets);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "تعذر تحميل البيانات");
@@ -545,6 +583,7 @@ export default function Delegates() {
         setSales={setSales}
         warehouse={warehouse}
         setWarehouse={setWarehouse}
+        warehouseBatches={warehouseBatches}
         targets={targets}
         setTargets={setTargets}
         section={section}
@@ -575,6 +614,7 @@ function AppShell({
   setSales,
   warehouse,
   setWarehouse,
+  warehouseBatches,
   targets,
   setTargets,
   section,
@@ -592,6 +632,7 @@ function AppShell({
   setSales: React.Dispatch<React.SetStateAction<Sale[]>>;
   warehouse: WarehouseSale[];
   setWarehouse: React.Dispatch<React.SetStateAction<WarehouseSale[]>>;
+  warehouseBatches: WarehouseBatch[];
   targets: TargetRecord[];
   setTargets: React.Dispatch<React.SetStateAction<TargetRecord[]>>;
   section:
@@ -600,6 +641,7 @@ function AppShell({
     | "history"
     | "warehouse"
     | "inventory"
+    | "catalog"
     | "targets"
     | "people";
   setSection: (
@@ -609,6 +651,7 @@ function AppShell({
       | "history"
       | "warehouse"
       | "inventory"
+      | "catalog"
       | "targets"
       | "people"
   ) => void;
@@ -663,6 +706,10 @@ function AppShell({
             : `${item.year}-${String(item.month).padStart(2, "0")}` ===
               periodPrefix
         );
+  const periodBatches =
+    period === "all"
+      ? warehouseBatches
+      : warehouseBatches.filter(item => item.saleDate.startsWith(periodPrefix));
   const monthlyUnits = periodSales.reduce(
     (sum, item) => sum + item.quantity,
     0
@@ -671,22 +718,20 @@ function AppShell({
     (sum, item) => sum + item.totalAmount,
     0
   );
-  const warehouseUnits = periodWarehouse.reduce(
-    (sum, item) => sum + item.quantity,
-    0
-  );
-  const netWarehouseUnits = warehouseUnits - monthlyUnits;
+  const warehouseUnits =
+    periodWarehouse.reduce((sum, item) => sum + item.quantity, 0) +
+    periodBatches.reduce((sum, item) => sum + item.totalQuantity, 0);
+  const netWarehouseUnits = Math.max(warehouseUnits - monthlyUnits, 0);
+  const showPeriodSummary = ["sales", "history", "warehouse"].includes(section);
 
   return (
     <main className="local-app">
       <header className="local-header">
         <div>
           <h1>{user.role === "admin" ? "لوحة المندوبين" : "إدخال المبيعات"}</h1>
-          <p>
-            {user.role === "admin"
-              ? "المبيعات، المذاخر، الأهداف، والفريق."
-              : `${user.displayName}${govName ? ` · ${govName}` : ""}`}
-          </p>
+          {user.role !== "admin" && (
+            <p>{`${user.displayName}${govName ? ` · ${govName}` : ""}`}</p>
+          )}
         </div>
         <div className="local-header-actions">
           {user.role === "admin" && <SaleNotifications />}
@@ -708,7 +753,7 @@ function AppShell({
           </button>
         </div>
       </header>
-      {section !== "dashboard" && (
+      {section !== "dashboard" && section !== "targets" && (
         <section className="local-period-bar" aria-label="فترة الإحصائيات">
           <div>
             <strong>الفترة: {periodLabel}</strong>
@@ -752,7 +797,7 @@ function AppShell({
       )}
       {error && <div className="local-error local-wide">{error}</div>}
 
-      {section !== "dashboard" && (
+      {showPeriodSummary && (
         <section className="local-summary">
           <div>
             <span>قطع المندوبين</span>
@@ -787,6 +832,7 @@ function AppShell({
               ["sales", "إدخال المبيعات", ClipboardList],
               ["warehouse", "مبيعات المذاخر", Store],
               ["inventory", "المخزون", Layers],
+              ["catalog", "الشركات والمواد", Building2],
               ["targets", "الأهداف والتارغت", Target],
               ["people", "المستخدمون والمندوبون", Users],
             ] as const
@@ -802,21 +848,40 @@ function AppShell({
           ))}
         </nav>
       )}
+      {user.role !== "admin" && user.canEnterWarehouse && (
+        <nav className="local-nav">
+          <button
+            className={section !== "warehouse" ? "active" : ""}
+            onClick={() => setSection("sales")}
+          >
+            <ClipboardList />
+            <span>إدخال المبيعات</span>
+          </button>
+          <button
+            className={section === "warehouse" ? "active" : ""}
+            onClick={() => setSection("warehouse")}
+          >
+            <Store />
+            <span>مبيعات المذاخر</span>
+          </button>
+        </nav>
+      )}
 
       {section === "dashboard" && user.role === "admin" && (
         <DelegatesDashboard
           reference={reference}
           sales={sales}
           warehouse={warehouse}
+          batches={warehouseBatches}
           targets={targets}
         />
       )}
-      {(section === "sales" || user.role !== "admin") && (
+      {(section === "sales" || (user.role !== "admin" && section !== "warehouse")) && (
         <SalesSection
           user={user}
           reference={reference}
           sales={periodSales}
-          warehouseUnits={warehouseUnits}
+
           setSales={setSales}
           showToast={showToast}
           reload={reload}
@@ -825,28 +890,40 @@ function AppShell({
       )}
       {section === "history" && user.role === "admin" && (
         <SalesHistory
-          sales={sales}
-          warehouseUnits={warehouseUnits}
+          sales={periodSales}
+          warehouseBatches={periodBatches}
+          legacyWarehouse={periodWarehouse}
+          periodLabel={periodLabel}
           onRefresh={() => reload(true)}
           onMessage={showToast}
         />
       )}
-      {section === "warehouse" && user.role === "admin" && (
+      {section === "warehouse" && (user.role === "admin" || user.canEnterWarehouse) && (
         <WarehouseBatches
           reference={reference}
           showToast={showToast}
           reload={reload}
+          period={period}
+          periodPrefix={periodPrefix}
         />
       )}
       {section === "inventory" && user.role === "admin" && (
         <InventorySection showToast={showToast} />
+      )}
+      {section === "catalog" && user.role === "admin" && (
+        <CatalogSection
+          reference={reference}
+          showToast={showToast}
+          reload={reload}
+        />
       )}
       {section === "targets" && user.role === "admin" && (
         <TargetsSection
           reference={reference}
           records={targets}
           setTargets={setTargets}
-          sales={sales}
+          warehouse={warehouse}
+          warehouseBatches={warehouseBatches}
           showToast={showToast}
           reload={reload}
         />
@@ -877,7 +954,6 @@ function SalesSection({
   user,
   reference,
   sales,
-  warehouseUnits,
   setSales,
   showToast,
   reload,
@@ -886,7 +962,6 @@ function SalesSection({
   user: User;
   reference: Reference;
   sales: Sale[];
-  warehouseUnits: number;
   setSales: React.Dispatch<React.SetStateAction<Sale[]>>;
   showToast: (text: string, type?: "success" | "error" | "info") => void;
   reload: (silent?: boolean) => void;
@@ -913,13 +988,14 @@ function SalesSection({
   ]);
   const [batchBusy, setBatchBusy] = useState(false);
 
-  // History Search
-  const [historySearch, setHistorySearch] = useState("");
-
   const reps = useMemo(
     () =>
-      reference.representatives.filter(r => r.governorateId === governorateId),
-    [reference.representatives, governorateId]
+      reference.representatives.filter(
+        representative =>
+          representative.governorateId === governorateId &&
+          (!companyId || representative.companyIds.includes(companyId))
+      ),
+    [reference.representatives, governorateId, companyId]
   );
 
   const materials = useMemo(
@@ -1110,17 +1186,7 @@ function SalesSection({
     }
   };
 
-  const filteredSales = useMemo(() => {
-    if (!historySearch.trim()) return sales;
-    const lower = historySearch.toLowerCase().trim();
-    return sales.filter(
-      s =>
-        s.material.toLowerCase().includes(lower) ||
-        s.representative.toLowerCase().includes(lower) ||
-        s.governorate.toLowerCase().includes(lower) ||
-        s.saleDate.includes(lower)
-    );
-  }, [sales, historySearch]);
+  const latestSales = sales.slice(0, 10);
 
   return (
     <section className="local-content">
@@ -1377,6 +1443,7 @@ function SalesSection({
                     }}
                     placeholder="اختر المادة..."
                     required
+                    showSearchIcon={false}
                   />
                   <Field label="الكمية">
                     <input
@@ -1486,10 +1553,10 @@ function SalesSection({
         </form>
       )}
 
-      <div className="local-history-link">
+      <div className="local-section-head compact">
         <div>
-          <h3>آخر الإدخالات والتقارير</h3>
-          <p>افتح شاشة مستقلة لعرض السجل وتعديله وتصديره.</p>
+          <h3>آخر 10 إدخالات</h3>
+          <p>أحدث المبيعات ضمن الفترة المحددة.</p>
         </div>
         <button
           type="button"
@@ -1498,6 +1565,27 @@ function SalesSection({
         >
           عرض جميع الإدخالات
         </button>
+      </div>
+      <div className="local-list">
+        {latestSales.map(sale => (
+          <article className="local-list-row" key={sale.id}>
+            <div>
+              <strong>{sale.material}</strong>
+              <span>
+                {sale.representative} · {sale.governorate} · {sale.saleDate} ·{" "}
+                {sale.supervisor}
+              </span>
+            </div>
+            <b>
+              {number(sale.quantity)} قطعة
+              <br />
+              <small>{money(sale.totalAmount)}</small>
+            </b>
+          </article>
+        ))}
+        {!latestSales.length && (
+          <div className="local-empty">لا توجد إدخالات في هذه الفترة.</div>
+        )}
       </div>
     </section>
   );
@@ -1983,14 +2071,16 @@ function TargetsSection({
   reference,
   records,
   setTargets,
-  sales,
+  warehouse,
+  warehouseBatches,
   showToast,
   reload,
 }: {
   reference: Reference;
   records: TargetRecord[];
   setTargets: React.Dispatch<React.SetStateAction<TargetRecord[]>>;
-  sales: Sale[];
+  warehouse: WarehouseSale[];
+  warehouseBatches: WarehouseBatch[];
   showToast: (text: string, type?: "success" | "error" | "info") => void;
   reload: (silent?: boolean) => void;
 }) {
@@ -2079,7 +2169,10 @@ function TargetsSection({
           targetAmount: value.amount,
         }),
       });
-      reload(true);
+      const refreshed = await api<{ targets: TargetRecord[] }>(
+        `/targets?year=${year}&month=${month}`
+      );
+      setTargets(refreshed.targets);
     } catch (err) {
       showToast(err instanceof Error ? err.message : "تعذر حفظ الهدف", "error");
     } finally {
@@ -2147,16 +2240,21 @@ function TargetsSection({
           const isSaving = savingGov === gov.id;
 
           // Calculate live achieved sales for this gov in this period
-          const govSales = sales.filter(
-            s =>
-              s.governorateId === gov.id &&
-              s.saleDate &&
-              s.saleDate.startsWith(periodPrefix)
-          );
-          const achievedUnits = govSales.reduce(
-            (sum, s) => sum + s.quantity,
-            0
-          );
+          const achievedUnits =
+            warehouseBatches
+              .filter(
+                batch =>
+                  batch.governorateId === gov.id &&
+                  batch.saleDate.startsWith(periodPrefix)
+              )
+              .reduce((sum, batch) => sum + batch.totalQuantity, 0) +
+            warehouse
+              .filter(
+                item =>
+                  item.governorateId === gov.id &&
+                  item.saleDate.startsWith(periodPrefix)
+              )
+              .reduce((sum, item) => sum + item.quantity, 0);
           const targetUnits =
             Number(value.quantity) || existing?.targetQuantity || 0;
           const percentage =
@@ -2316,9 +2414,11 @@ function PeopleSection({
   showToast: (text: string, type?: "success" | "error" | "info") => void;
   reload: (silent?: boolean) => void;
 }) {
-  const [form, setForm] = useState({
+  const [repForm, setRepForm] = useState({
+    id: "",
     name: "",
     governorateId: reference.governorates[0]?.id || "",
+    companyIds: reference.companies.map(item => item.id),
   });
   const [supervisor, setSupervisor] = useState({
     displayName: "",
@@ -2326,171 +2426,53 @@ function PeopleSection({
     password: "",
     governorateId: reference.governorates[0]?.id || "",
     companyIds: reference.companies.map(item => item.id),
+    canEnterWarehouse: false,
   });
-
   const [usersList, setUsersList] = useState<User[]>([]);
-  const [filterGovId, setFilterGovId] = useState<string>("all");
+  const [filterGovId, setFilterGovId] = useState("all");
   const [repSearch, setRepSearch] = useState("");
-  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [busy, setBusy] = useState("");
 
-  // Fetch users on load
   const loadUsers = async () => {
-    try {
-      const res = await api<{ users: User[] }>("/users");
-      setUsersList(res.users || []);
-    } catch {
-      // Ignored if non-admin
-    }
+    const result = await api<{ users: User[] }>("/v2/admin/users");
+    setUsersList(result.users || []);
+  };
+  const refreshReference = async () => {
+    const next = await api<Reference>("/v2/reference");
+    setReference(next);
   };
 
   useEffect(() => {
-    void loadUsers();
+    void loadUsers().catch(() => showToast("تعذر تحميل الحسابات", "error"));
   }, []);
 
-  // Add Representative (Optimistic)
-  const addRep = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!form.name.trim()) return;
-
-    const newName = form.name.trim();
-    const tempId = `temp-${Date.now()}`;
-    const optimisticRep: Representative = {
-      id: tempId,
-      name: newName,
-      governorateId: form.governorateId,
-    };
-
-    setReference(prev =>
-      prev
-        ? {
-            ...prev,
-            representatives: [...prev.representatives, optimisticRep],
-          }
-        : null
-    );
-
-    showToast(`✓ تمت إضافة "${newName}" بنجاح`);
-    setForm({ ...form, name: "" });
-
+  const addSupervisor = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!supervisor.companyIds.length)
+      return showToast("اختر شركة واحدة على الأقل للمشرف", "error");
+    setBusy("supervisor");
     try {
-      const res = await api<{ id: string }>("/representatives", {
+      await api("/v2/admin/users", {
         method: "POST",
-        body: JSON.stringify({
-          name: newName,
-          governorateId: form.governorateId,
-        }),
+        body: JSON.stringify(supervisor),
       });
-      if (res?.id) {
-        setReference(prev =>
-          prev
-            ? {
-                ...prev,
-                representatives: prev.representatives.map(r =>
-                  r.id === tempId ? { ...r, id: res.id } : r
-                ),
-              }
-            : null
-        );
-      }
-      reload(true);
-    } catch (err) {
-      setReference(prev =>
-        prev
-          ? {
-              ...prev,
-              representatives: prev.representatives.filter(
-                r => r.id !== tempId
-              ),
-            }
-          : null
-      );
-      showToast(
-        err instanceof Error ? err.message : "تعذر إضافة المندوب",
-        "error"
-      );
-    }
-  };
-
-  // Delete Representative (Optimistic)
-  const deleteRep = async (repId: string, repName: string) => {
-    if (!window.confirm(`هل أنت متأكد من حذف المندوب "${repName}"؟`)) {
-      return;
-    }
-    setDeletingId(repId);
-
-    const deletedRep = reference.representatives.find(r => r.id === repId);
-
-    setReference(prev =>
-      prev
-        ? {
-            ...prev,
-            representatives: prev.representatives.filter(r => r.id !== repId),
-          }
-        : null
-    );
-
-    showToast(`✓ تم حذف "${repName}"`);
-
-    try {
-      await api(`/representatives/${repId}`, {
-        method: "DELETE",
+      showToast(`تم إنشاء حساب المشرف "${supervisor.displayName}"`);
+      setSupervisor({
+        ...supervisor,
+        displayName: "",
+        username: "",
+        password: "",
+        canEnterWarehouse: false,
       });
+      await loadUsers();
       reload(true);
-    } catch (err) {
-      if (deletedRep) {
-        setReference(prev =>
-          prev
-            ? {
-                ...prev,
-                representatives: [...prev.representatives, deletedRep],
-              }
-            : null
-        );
-      }
+    } catch (error) {
       showToast(
-        err instanceof Error ? err.message : "تعذر حذف المندوب",
+        error instanceof Error ? error.message : "تعذر إنشاء المشرف",
         "error"
       );
     } finally {
-      setDeletingId(null);
-    }
-  };
-
-  const editRep = async (rep: Representative) => {
-    const name = window.prompt("اسم المندوب", rep.name)?.trim();
-    if (!name) return;
-    const governorate = window
-      .prompt(
-        "اسم المحافظة",
-        reference.governorates.find(item => item.id === rep.governorateId)
-          ?.name || ""
-      )
-      ?.trim();
-    if (!governorate) return;
-    const governorateId = reference.governorates.find(
-      item => item.name === governorate
-    )?.id;
-    if (!governorateId)
-      return showToast("اختر اسم محافظة موجوداً تماماً", "error");
-    try {
-      await api(`/representatives/${rep.id}`, {
-        method: "PATCH",
-        body: JSON.stringify({ name, governorateId }),
-      });
-      setReference(prev =>
-        prev
-          ? {
-              ...prev,
-              representatives: prev.representatives.map(item =>
-                item.id === rep.id ? { ...item, name, governorateId } : item
-              ),
-            }
-          : null
-      );
-      showToast("تم تعديل المندوب");
-      reload(true);
-    } catch {
-      showToast("تعذر تعديل المندوب", "error");
+      setBusy("");
     }
   };
 
@@ -2509,100 +2491,161 @@ function PeopleSection({
       showToast("تعذر حذف حساب المشرف", "error");
     }
   };
-  // Add Supervisor
-  const addSupervisor = async (e: FormEvent) => {
-    e.preventDefault();
-    try {
-      await api("/users", {
-        method: "POST",
-        body: JSON.stringify({ ...supervisor, role: "supervisor" }),
-      });
-      showToast(`✓ تم إنشاء حساب المشرف "${supervisor.displayName}" بنجاح`);
-      setSupervisor({
-        ...supervisor,
-        displayName: "",
-        username: "",
-        password: "",
-      });
-      void loadUsers();
-      reload(true);
-    } catch (err) {
-      showToast(
-        err instanceof Error ? err.message : "تعذر إنشاء المشرف",
-        "error"
-      );
-    }
-  };
 
-  // Reset Supervisor Password
-  const resetPassword = async (userId: string, userName: string) => {
-    const newPass = window.prompt(
-      `أدخل كلمة المرور الجديدة للمشرف (${userName}) - 6 أحرف كحد أدنى:`
+  const resetPassword = async (account: User) => {
+    const password = window.prompt(
+      `كلمة المرور الجديدة للمشرف ${account.displayName} (6 أحرف على الأقل)`
     );
-    if (!newPass) return;
-    if (newPass.length < 6) {
-      showToast("كلمة المرور يجب أن تكون 6 أحرف على الأقل", "error");
-      return;
-    }
+    if (!password) return;
+    if (password.length < 6)
+      return showToast("كلمة المرور قصيرة", "error");
     try {
-      await api(`/users/${userId}/password`, {
+      await api(`/v2/admin/users/${account.id}/password`, {
         method: "POST",
-        body: JSON.stringify({ password: newPass }),
+        body: JSON.stringify({ password }),
       });
-      showToast(`✓ تم تحديث كلمة المرور لـ "${userName}" بنجاح`);
-    } catch (err) {
-      showToast(
-        err instanceof Error ? err.message : "تعذر تحديث كلمة المرور",
-        "error"
-      );
+      showToast("تم تغيير كلمة المرور وإغلاق جلساته القديمة");
+    } catch {
+      showToast("تعذر تغيير كلمة المرور", "error");
     }
   };
 
-  const displayedReps = useMemo(() => {
-    return reference.representatives.filter(item => {
-      const matchGov =
-        filterGovId === "all" || item.governorateId === filterGovId;
-      const matchSearch =
-        !repSearch.trim() ||
-        item.name.toLowerCase().includes(repSearch.toLowerCase().trim());
-      return matchGov && matchSearch;
+  const saveRep = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!repForm.name.trim() || !repForm.companyIds.length)
+      return showToast("اكتب اسم المندوب واختر شركاته", "error");
+    setBusy("representative");
+    try {
+      await api(
+        repForm.id
+          ? `/v2/admin/representatives/${repForm.id}`
+          : "/v2/admin/representatives",
+        {
+          method: repForm.id ? "PATCH" : "POST",
+          body: JSON.stringify({
+            name: repForm.name,
+            governorateId: repForm.governorateId,
+            companyIds: repForm.companyIds,
+            active: true,
+          }),
+        }
+      );
+      showToast(repForm.id ? "تم تعديل المندوب" : "تمت إضافة المندوب");
+      setRepForm({
+        id: "",
+        name: "",
+        governorateId: reference.governorates[0]?.id || "",
+        companyIds: reference.companies.map(item => item.id),
+      });
+      await refreshReference();
+      reload(true);
+    } catch (error) {
+      showToast(
+        error instanceof Error ? error.message : "تعذر حفظ المندوب",
+        "error"
+      );
+    } finally {
+      setBusy("");
+    }
+  };
+
+  const editRep = (representative: Representative) => {
+    setRepForm({
+      id: representative.id,
+      name: representative.name,
+      governorateId: representative.governorateId,
+      companyIds: representative.companyIds,
     });
-  }, [reference.representatives, filterGovId, repSearch]);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const deleteRep = async (representative: Representative) => {
+    if (!window.confirm(`حذف المندوب "${representative.name}"؟`)) return;
+    setBusy(representative.id);
+    try {
+      await api(`/representatives/${representative.id}`, {
+        method: "DELETE",
+      });
+      await refreshReference();
+      reload(true);
+      showToast("تم حذف المندوب");
+    } catch {
+      showToast("تعذر حذف المندوب", "error");
+    } finally {
+      setBusy("");
+    }
+  };
+
+  const displayedReps = useMemo(
+    () =>
+      reference.representatives.filter(item => {
+        const matchGov =
+          filterGovId === "all" || item.governorateId === filterGovId;
+        const matchSearch =
+          !repSearch.trim() ||
+          item.name.toLowerCase().includes(repSearch.toLowerCase().trim());
+        return matchGov && matchSearch;
+      }),
+    [reference.representatives, filterGovId, repSearch]
+  );
+
+  const companyChecks = (
+    selected: string[],
+    update: (companyIds: string[]) => void
+  ) => (
+    <div className="local-company-checks">
+      <span className="local-field-label">الشركات المسموحة</span>
+      {reference.companies.map(company => (
+        <label key={company.id}>
+          <input
+            type="checkbox"
+            checked={selected.includes(company.id)}
+            onChange={event =>
+              update(
+                event.target.checked
+                  ? [...selected, company.id]
+                  : selected.filter(id => id !== company.id)
+              )
+            }
+          />
+          {company.name}
+        </label>
+      ))}
+    </div>
+  );
 
   return (
     <section className="local-content">
       <div className="local-section-head">
         <div>
-          <span className="local-kicker">إدارة الكادر والمندوبين</span>
+          <span className="local-kicker">إدارة الدخول والمندوبين</span>
           <h2>المشرفون والمندوبون</h2>
-          <p>إضافة وحذف لحظي، تصفية المحافظات، وتحكم كامل بالصلاحيات.</p>
+          <p>المشرف يرى فقط المحافظة والشركات والمواد المحددة له.</p>
         </div>
         <Users />
       </div>
 
       <div className="local-dual">
-        {/* نموذج إضافة مشرف */}
         <form className="local-form-card" onSubmit={addSupervisor}>
-          <h3>
-            <UserPlus /> إنشاء حساب مشرف (Supervisor)
-          </h3>
+          <h3><UserPlus /> إنشاء حساب مشرف</h3>
           <Field label="اسم المشرف">
             <input
               value={supervisor.displayName}
-              onChange={e =>
-                setSupervisor({ ...supervisor, displayName: e.target.value })
+              onChange={event =>
+                setSupervisor({
+                  ...supervisor,
+                  displayName: event.target.value,
+                })
               }
-              placeholder="مثال: علي كريم"
               required
             />
           </Field>
-          <Field label="اسم المستخدم (Username)">
+          <Field label="اسم المستخدم">
             <input
               value={supervisor.username}
-              onChange={e =>
-                setSupervisor({ ...supervisor, username: e.target.value })
+              onChange={event =>
+                setSupervisor({ ...supervisor, username: event.target.value })
               }
-              placeholder="مثال: ali_basra"
               required
             />
           </Field>
@@ -2611,20 +2654,19 @@ function PeopleSection({
               type="password"
               minLength={6}
               value={supervisor.password}
-              onChange={e =>
-                setSupervisor({ ...supervisor, password: e.target.value })
+              onChange={event =>
+                setSupervisor({ ...supervisor, password: event.target.value })
               }
-              placeholder="6 أحرف أو أرقام على الأقل"
               required
             />
           </Field>
-          <Field label="المحافظة التابع لها">
+          <Field label="المحافظة">
             <select
               value={supervisor.governorateId}
-              onChange={e =>
+              onChange={event =>
                 setSupervisor({
                   ...supervisor,
-                  governorateId: e.target.value,
+                  governorateId: event.target.value,
                 })
               }
             >
@@ -2635,50 +2677,48 @@ function PeopleSection({
               ))}
             </select>
           </Field>
-          <div className="local-company-checks">
-            <span className="local-field-label">الشركات المسموحة:</span>
-            {reference.companies.map(company => (
-              <label key={company.id}>
-                <input
-                  type="checkbox"
-                  checked={supervisor.companyIds.includes(company.id)}
-                  onChange={e =>
-                    setSupervisor({
-                      ...supervisor,
-                      companyIds: e.target.checked
-                        ? [...supervisor.companyIds, company.id]
-                        : supervisor.companyIds.filter(id => id !== company.id),
-                    })
-                  }
-                />{" "}
-                {company.name}
-              </label>
-            ))}
-          </div>
-
-          <button className="local-primary" style={{ marginTop: 14 }}>
-            <Plus /> إنشاء حساب المشرف
+          {companyChecks(supervisor.companyIds, companyIds =>
+            setSupervisor({ ...supervisor, companyIds })
+          )}
+          <label className="local-permission-check">
+            <input
+              type="checkbox"
+              checked={supervisor.canEnterWarehouse}
+              onChange={event =>
+                setSupervisor({
+                  ...supervisor,
+                  canEnterWarehouse: event.target.checked,
+                })
+              }
+            />
+            السماح بإدخال مبيعات المذاخر
+          </label>
+          <button className="local-primary" disabled={busy === "supervisor"}>
+            <Plus /> إنشاء الحساب
           </button>
         </form>
 
-        {/* نموذج إضافة مندوب */}
-        <form className="local-form-card" onSubmit={addRep}>
+        <form className="local-form-card" onSubmit={saveRep}>
           <h3>
-            <Users /> إضافة مندوب جديد
+            <Users /> {repForm.id ? "تعديل المندوب" : "إضافة مندوب"}
           </h3>
           <Field label="اسم المندوب">
             <input
-              value={form.name}
-              onChange={e => setForm({ ...form, name: e.target.value })}
-              placeholder="مثال: مندوب البصرة 1"
+              value={repForm.name}
+              onChange={event =>
+                setRepForm({ ...repForm, name: event.target.value })
+              }
               required
             />
           </Field>
           <Field label="المحافظة">
             <select
-              value={form.governorateId}
-              onChange={e =>
-                setForm({ ...form, governorateId: e.target.value })
+              value={repForm.governorateId}
+              onChange={event =>
+                setRepForm({
+                  ...repForm,
+                  governorateId: event.target.value,
+                })
               }
             >
               {reference.governorates.map(item => (
@@ -2688,200 +2728,144 @@ function PeopleSection({
               ))}
             </select>
           </Field>
-
-          <button className="local-primary" style={{ marginTop: 14 }}>
-            <Plus /> إضافة المندوب فوراً
-          </button>
+          {companyChecks(repForm.companyIds, companyIds =>
+            setRepForm({ ...repForm, companyIds })
+          )}
+          <div className="local-form-actions">
+            <button className="local-primary" disabled={busy === "representative"}>
+              <Check /> {repForm.id ? "حفظ التعديل" : "إضافة المندوب"}
+            </button>
+            {repForm.id && (
+              <button
+                type="button"
+                className="local-secondary"
+                onClick={() =>
+                  setRepForm({
+                    id: "",
+                    name: "",
+                    governorateId: reference.governorates[0]?.id || "",
+                    companyIds: reference.companies.map(item => item.id),
+                  })
+                }
+              >
+                <X size={15} /> إلغاء
+              </button>
+            )}
+          </div>
         </form>
       </div>
 
-      {/* قائمة المشرفين المسجلين */}
-      {usersList.length > 0 && (
-        <>
-          <div className="local-section-head compact">
-            <div>
-              <h2>المشرفون وحسابات الدخول ({usersList.length})</h2>
-              <p>إدارة حسابات الدخول وتغيير كلمات المرور.</p>
-            </div>
-            <UserCheck size={20} />
-          </div>
-
-          <div className="local-list">
-            {usersList.map(u => {
-              const uGov = reference.governorates.find(
-                g => g.id === u.governorateId
-              );
-              return (
-                <div className="local-list-row" key={u.id}>
-                  <div>
-                    <strong>
-                      {u.displayName} (@{u.username})
-                    </strong>
-                    <span>
-                      الدور:{" "}
-                      {u.role === "admin"
-                        ? "مدير النظام (Admin)"
-                        : `مشرف (${uGov?.name || "عام"})`}
-                    </span>
-                  </div>
-                  <div
-                    style={{ display: "flex", alignItems: "center", gap: 8 }}
-                  >
-                    {u.role === "supervisor" && (
-                      <button
-                        type="button"
-                        className="local-danger-button"
-                        onClick={() => void deleteSupervisor(u)}
-                      >
-                        <Trash2 size={14} /> حذف
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => void resetPassword(u.id, u.displayName)}
-                      style={{
-                        background: "#e7f4f0",
-                        color: "#087f6a",
-                        border: "1px solid #cce8e0",
-                        borderRadius: 8,
-                        padding: "6px 12px",
-                        cursor: "pointer",
-                        fontSize: 11,
-                        fontWeight: 800,
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: 5,
-                      }}
-                    >
-                      <KeyRound size={13} />
-                      <span>تغيير كلمة المرور</span>
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </>
-      )}
-
-      {/* قائمة المندوبين مع الفلترة السريعة */}
       <div className="local-section-head compact">
         <div>
-          <h2>قائمة المندوبين ({displayedReps.length})</h2>
-          <p>فلترة فورية وتعديل مباشر.</p>
+          <h2>المشرفون وحسابات الدخول ({number(usersList.length)})</h2>
+          <p>إدارة الحسابات والصلاحيات وكلمات المرور.</p>
         </div>
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <div style={{ position: "relative", width: 180 }}>
-            <input
-              type="text"
-              placeholder="بحث بالاسم..."
-              value={repSearch}
-              onChange={e => setRepSearch(e.target.value)}
-              style={{
-                width: "100%",
-                height: 36,
-                padding: "0 28px 0 8px",
-                borderRadius: 10,
-                border: "1px solid #dfe8e5",
-                background: "#fff",
-                fontSize: 11,
-                fontWeight: 700,
-              }}
-            />
-            <Search
-              size={13}
-              style={{
-                position: "absolute",
-                right: 9,
-                top: "50%",
-                transform: "translateY(-50%)",
-                color: "#94a3b8",
-              }}
-            />
-          </div>
-
-          <select
-            value={filterGovId}
-            onChange={e => setFilterGovId(e.target.value)}
-            style={{
-              height: 36,
-              padding: "0 10px",
-              borderRadius: 10,
-              border: "1px solid #dfe8e5",
-              background: "#fff",
-              fontSize: 11,
-              fontWeight: 800,
-              cursor: "pointer",
-            }}
-          >
-            <option value="all">
-              جميع المحافظات ({reference.representatives.length})
-            </option>
-            {reference.governorates.map(gov => {
-              const count = reference.representatives.filter(
-                r => r.governorateId === gov.id
-              ).length;
-              return (
-                <option key={gov.id} value={gov.id}>
-                  {gov.name} ({count})
-                </option>
-              );
-            })}
-          </select>
-        </div>
+        <UserCheck size={20} />
       </div>
-
       <div className="local-list">
-        {displayedReps.map(item => {
-          const gov = reference.governorates.find(
-            g => g.id === item.governorateId
+        {usersList.map(account => {
+          const governorate = reference.governorates.find(
+            item => item.id === account.governorateId
           );
-          const isDeleting = deletingId === item.id;
+          const allowedCompanies = reference.companies
+            .filter(company => account.companyIds?.includes(company.id))
+            .map(company => company.name)
+            .join("، ");
           return (
-            <div className="local-list-row" key={item.id}>
+            <article className="local-list-row" key={account.id}>
               <div>
-                <strong>{item.name}</strong>
-                <span>{gov?.name || "محافظة غير محددة"}</span>
+                <strong>{account.displayName} (@{account.username})</strong>
+                <span>
+                  {account.role === "admin"
+                    ? "مدير النظام"
+                    : `${governorate?.name || "بلا محافظة"} · ${allowedCompanies || "بلا شركات"}`}
+                  {account.canEnterWarehouse ? " · مبيعات المذاخر مسموحة" : ""}
+                </span>
               </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div className="local-history-row-actions">
                 <button
                   type="button"
                   className="local-plain-button"
-                  onClick={() => void editRep(item)}
+                  onClick={() => void resetPassword(account)}
+                >
+                  <KeyRound size={14} /> تغيير كلمة المرور
+                </button>
+                {account.role === "supervisor" && (
+                  <button
+                    type="button"
+                    className="local-danger-button"
+                    onClick={() => void deleteSupervisor(account)}
+                  >
+                    <Trash2 size={14} /> حذف
+                  </button>
+                )}
+              </div>
+            </article>
+          );
+        })}
+      </div>
+
+      <div className="local-section-head compact">
+        <div>
+          <h2>المندوبون ({number(displayedReps.length)})</h2>
+          <p>كل مندوب مرتبط بمحافظة واحدة وشركة أو أكثر.</p>
+        </div>
+        <div className="local-compact-filters">
+          <input
+            value={repSearch}
+            onChange={event => setRepSearch(event.target.value)}
+            placeholder="بحث بالاسم"
+          />
+          <select
+            value={filterGovId}
+            onChange={event => setFilterGovId(event.target.value)}
+          >
+            <option value="all">كل المحافظات</option>
+            {reference.governorates.map(governorate => (
+              <option key={governorate.id} value={governorate.id}>
+                {governorate.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+      <div className="local-list">
+        {displayedReps.map(representative => {
+          const governorate = reference.governorates.find(
+            item => item.id === representative.governorateId
+          );
+          const companies = reference.companies
+            .filter(company => representative.companyIds.includes(company.id))
+            .map(company => company.name)
+            .join("، ");
+          return (
+            <article className="local-list-row" key={representative.id}>
+              <div>
+                <strong>{representative.name}</strong>
+                <span>{governorate?.name} · {companies || "بلا شركات"}</span>
+              </div>
+              <div className="local-history-row-actions">
+                <button
+                  type="button"
+                  className="local-plain-button"
+                  onClick={() => editRep(representative)}
                 >
                   <Pencil size={14} /> تعديل
                 </button>
                 <button
                   type="button"
-                  onClick={() => void deleteRep(item.id, item.name)}
-                  disabled={isDeleting}
-                  title={`حذف ${item.name}`}
-                  style={{
-                    background: "#fee2e2",
-                    color: "#dc2626",
-                    border: "1px solid #fecaca",
-                    borderRadius: 8,
-                    padding: "6px 12px",
-                    cursor: "pointer",
-                    fontSize: 11,
-                    fontWeight: 800,
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 5,
-                    transition: "all 0.15s ease",
-                  }}
+                  className="local-danger-button"
+                  disabled={busy === representative.id}
+                  onClick={() => void deleteRep(representative)}
                 >
-                  <Trash2 size={13} />
-                  <span>{isDeleting ? "جارٍ الحذف..." : "حذف"}</span>
+                  <Trash2 size={14} /> حذف
                 </button>
               </div>
-            </div>
+            </article>
           );
         })}
         {!displayedReps.length && (
-          <div className="local-empty">
-            لا يوجد مندوبون مطابقون لهذا التحديد.
-          </div>
+          <div className="local-empty">لا يوجد مندوبون مطابقون.</div>
         )}
       </div>
     </section>

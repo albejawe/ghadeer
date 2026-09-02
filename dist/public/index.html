@@ -6,11 +6,11 @@
     <meta name="theme-color" content="#0f766e" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#080e18" media="(prefers-color-scheme: dark)" />
     <meta name="description" content="غدير — مبيعات المندوبين والمذاخر" />
-    
+
     <!-- PWA Primary Tags -->
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="icon" type="image/svg+xml" href="/icon.svg" />
-    
+
     <!-- iOS PWA Tags -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
@@ -21,19 +21,26 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&family=Noto+Sans+Arabic:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-    
+
     <title>غدير — مبيعات المندوبين</title>
-    <script type="module" crossorigin src="/assets/index-CfZDIWz6.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-CAv6SpGd.css">
+    <script type="module" crossorigin src="/assets/index-F5Exu5w8.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-Xhn-IBqL.css">
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root"></div>
     <script>
       // Service Worker Registration for PWA & Push Notifications
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
           navigator.serviceWorker.register('/sw.js', { scope: '/' })
             .then((reg) => {
+              let refreshing = false;
+              navigator.serviceWorker.addEventListener('controllerchange', () => {
+                if (refreshing) return;
+                refreshing = true;
+                window.location.reload();
+              });
+              void reg.update();
               // Check for SW updates
               reg.addEventListener('updatefound', () => {
                 const newWorker = reg.installing;
