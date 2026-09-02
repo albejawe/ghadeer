@@ -473,12 +473,8 @@ export default function Delegates() {
         currentUser || (await api<{ user: User | null }>("/auth/me")).user;
       if (!me) {
         setUser(null);
-        setSetup(false);
-        try {
-          await api("/users");
-        } catch (cause) {
-          setSetup(String(cause).includes("UNAUTHORIZED") ? true : false);
-        }
+        const status = await api<{ initialized: boolean }>("/auth/status");
+        setSetup(!status.initialized);
         return;
       }
       setUser(me);

@@ -78,6 +78,15 @@ router.get("/auth/me", async (req, res) => {
   }
 });
 
+router.get("/auth/status", async (_req, res) => {
+  try {
+    await ensureLocalSchema();
+    return res.json({ ok: true, initialized: (await countUsers()) > 0 });
+  } catch {
+    return res.status(503).json({ ok: false, error: "DATABASE_UNAVAILABLE" });
+  }
+});
+
 router.post("/auth/logout", async (req, res) => {
   try {
     await logoutUser(req, res);
