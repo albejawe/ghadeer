@@ -92,7 +92,7 @@ export function NotificationCenter({
         )}
 
         {dueItems.length > 0 && (
-          <span className="notification-counter-badge tabular">
+          <span className="notification-counter-badge tabular" dir="ltr">
             {dueItems.length > 99 ? "+99" : dueItems.length}
           </span>
         )}

@@ -28,6 +28,7 @@ export function SaleNotifications() {
   const [pushState, setPushState] = useState<PushState>("idle");
   const [activationNeeded, setActivationNeeded] = useState(false);
   const seen = useRef(new Set<string>());
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const refresh = async () => {
     try {
@@ -48,6 +49,18 @@ export function SaleNotifications() {
     return () => window.clearInterval(timer);
   }, []);
 
+  // Close popover when clicking outside
+  useEffect(() => {
+    if (!open) return;
+    const handleClickOutside = (event: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [open]);
+
   const subscribe = async () => {
     if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) { setPushState("unsupported"); return; }
     setPushState("working");
@@ -66,23 +79,73 @@ export function SaleNotifications() {
   };
 
   const unread = items.filter((item) => !item.readAt).length;
+
   const markAllRead = async () => {
-    await request("/notifications/read", { method: "POST" });
+    // Immediately clear local state so badge disappears instantly with 0 lag
     setItems((previous) => previous.map((item) => ({ ...item, readAt: item.readAt || new Date().toISOString() })));
     if ("clearAppBadge" in navigator) void (navigator as Navigator & { clearAppBadge: () => Promise<void> }).clearAppBadge();
+    try {
+      await request("/notifications/read", { method: "POST" });
+    } catch {
+      // offline fallback
+    }
+  };
+
+  const handleToggle = () => {
+    setOpen((prev) => {
+      const next = !prev;
+      // When opening to view notifications, automatically mark all unread as read!
+      if (next && unread > 0) {
+        void markAllRead();
+      }
+      return next;
+    });
   };
 
   return <>
     {activationNeeded && <aside className="local-push-activation" role="status"><Smartphone size={19} /><div><strong>فعّل إشعارات غدير</strong><span>ستصلك مبيعات المشرفين حتى عند إغلاق التطبيق.</span></div><button type="button" onClick={() => void subscribe()}>تفعيل الآن</button></aside>}
-    <div className="local-notifications">
-      <button className="local-icon" type="button" onClick={() => setOpen((value) => !value)} aria-label="الإشعارات"><Bell />{unread > 0 && <em>{unread > 9 ? "9+" : unread}</em>}</button>
+    <div className="local-notifications" ref={containerRef}>
+      <button
+        className="local-icon"
+        type="button"
+        onClick={handleToggle}
+        aria-label="الإشعارات"
+        title="إشعارات المبيعات والمستودعات"
+      >
+        <Bell />
+        {unread > 0 && <em dir="ltr">{unread > 9 ? "9+" : unread}</em>}
+      </button>
       {open && <aside className="local-notification-popover">
-        <div className="local-notification-title"><strong>إشعارات المبيعات</strong><button type="button" onClick={() => setOpen(false)} aria-label="إغلاق"><X size={16} /></button></div>
+        <div className="local-notification-title">
+          <strong>إشعارات المبيعات</strong>
+          <button type="button" onClick={() => setOpen(false)} aria-label="إغلاق"><X size={16} /></button>
+        </div>
         {pushState !== "ready" && <button className="local-notification-enable" type="button" disabled={pushState === "working" || pushState === "unsupported"} onClick={() => void subscribe()}>{pushState === "working" ? "جارٍ التفعيل..." : pushState === "denied" ? "الإذن مرفوض من الجهاز" : pushState === "unsupported" ? "الإشعارات غير مدعومة هنا" : "تفعيل إشعارات الخلفية"}</button>}
         {pushState === "ready" && <p className="local-push-ready">الإشعارات الخلفية مفعّلة لهذا الجهاز.</p>}
         {pushState === "error" && <p className="local-push-error">تعذر التفعيل الآن. تأكد من الاتصال ثم حاول مجدداً.</p>}
-        {unread > 0 && <button className="local-notification-read" type="button" onClick={() => void markAllRead()}><CheckCheck size={14} /> تم الاطلاع على الكل</button>}
-        <div className="local-notification-list">{items.length ? items.map((item) => <article key={item.id} className={item.readAt ? "read" : ""}><strong>{item.title}</strong><span>{item.body}</span></article>) : <p>لا توجد إشعارات جديدة.</p>}</div>
+        {unread > 0 && (
+          <button className="local-notification-read" type="button" onClick={() => void markAllRead()}>
+            <CheckCheck size={14} /> تم الاطلاع على الكل
+          </button>
+        )}
+        <div className="local-notification-list">
+          {items.length ? (
+            items.map((item) => (
+              <article
+                key={item.id}
+                className={item.readAt ? "read" : ""}
+                onClick={() => {
+                  if (!item.readAt) void markAllRead();
+                }}
+              >
+                <strong>{item.title}</strong>
+                <span>{item.body}</span>
+              </article>
+            ))
+          ) : (
+            <p>لا توجد إشعارات جديدة.</p>
+          )}
+        </div>
       </aside>}
     </div>
   </>;
