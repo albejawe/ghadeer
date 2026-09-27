@@ -42,6 +42,7 @@ type User = {
   governorateId: string | null;
   active: boolean;
   canEnterWarehouse?: boolean;
+  canManageInventory?: boolean;
   companyIds?: string[];
 };
 
@@ -848,22 +849,33 @@ function AppShell({
           ))}
         </nav>
       )}
-      {user.role !== "admin" && user.canEnterWarehouse && (
+      {user.role !== "admin" && (user.canEnterWarehouse || user.canManageInventory) && (
         <nav className="local-nav">
           <button
-            className={section !== "warehouse" ? "active" : ""}
+            className={section === "sales" ? "active" : ""}
             onClick={() => setSection("sales")}
           >
             <ClipboardList />
             <span>إدخال المبيعات</span>
           </button>
-          <button
-            className={section === "warehouse" ? "active" : ""}
-            onClick={() => setSection("warehouse")}
-          >
-            <Store />
-            <span>مبيعات المذاخر</span>
-          </button>
+          {user.canEnterWarehouse && (
+            <button
+              className={section === "warehouse" ? "active" : ""}
+              onClick={() => setSection("warehouse")}
+            >
+              <Store />
+              <span>مبيعات المذاخر</span>
+            </button>
+          )}
+          {user.canManageInventory && (
+            <button
+              className={section === "inventory" ? "active" : ""}
+              onClick={() => setSection("inventory")}
+            >
+              <Layers />
+              <span>المخزون</span>
+            </button>
+          )}
         </nav>
       )}
 
@@ -876,7 +888,7 @@ function AppShell({
           targets={targets}
         />
       )}
-      {(section === "sales" || (user.role !== "admin" && section !== "warehouse")) && (
+      {(section === "sales" || (user.role !== "admin" && section !== "warehouse" && section !== "inventory")) && (
         <SalesSection
           user={user}
           reference={reference}
@@ -907,7 +919,7 @@ function AppShell({
           periodPrefix={periodPrefix}
         />
       )}
-      {section === "inventory" && user.role === "admin" && (
+      {section === "inventory" && (user.role === "admin" || user.canManageInventory) && (
         <InventorySection showToast={showToast} />
       )}
       {section === "catalog" && user.role === "admin" && (
@@ -2427,7 +2439,18 @@ function PeopleSection({
     governorateId: reference.governorates[0]?.id || "",
     companyIds: reference.companies.map(item => item.id),
     canEnterWarehouse: false,
+    canManageInventory: false,
   });
+  const [editingSupervisor, setEditingSupervisor] = useState<{
+    id: string;
+    displayName: string;
+    username: string;
+    governorateId: string;
+    companyIds: string[];
+    canEnterWarehouse: boolean;
+    canManageInventory: boolean;
+    active: boolean;
+  } | null>(null);
   const [usersList, setUsersList] = useState<User[]>([]);
   const [filterGovId, setFilterGovId] = useState("all");
   const [repSearch, setRepSearch] = useState("");
@@ -2463,12 +2486,60 @@ function PeopleSection({
         username: "",
         password: "",
         canEnterWarehouse: false,
+        canManageInventory: false,
       });
       await loadUsers();
       reload(true);
     } catch (error) {
       showToast(
         error instanceof Error ? error.message : "تعذر إنشاء المشرف",
+        "error"
+      );
+    } finally {
+      setBusy("");
+    }
+  };
+
+  const startEditSupervisor = (account: User) => {
+    setEditingSupervisor({
+      id: account.id,
+      displayName: account.displayName,
+      username: account.username,
+      governorateId: account.governorateId || reference.governorates[0]?.id || "",
+      companyIds: account.companyIds && account.companyIds.length ? account.companyIds : reference.companies.map(c => c.id),
+      canEnterWarehouse: Boolean(account.canEnterWarehouse),
+      canManageInventory: Boolean(account.canManageInventory),
+      active: account.active !== false,
+    });
+  };
+
+  const updateSupervisor = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!editingSupervisor) return;
+    if (!editingSupervisor.displayName.trim())
+      return showToast("اكتب اسم المشرف", "error");
+    if (!editingSupervisor.companyIds.length)
+      return showToast("اختر شركة واحدة على الأقل للمشرف", "error");
+    setBusy("editSupervisor");
+    try {
+      await api(`/v2/admin/users/${editingSupervisor.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          displayName: editingSupervisor.displayName,
+          governorateId: editingSupervisor.governorateId,
+          companyIds: editingSupervisor.companyIds,
+          canEnterWarehouse: editingSupervisor.canEnterWarehouse,
+          canManageInventory: editingSupervisor.canManageInventory,
+          active: editingSupervisor.active,
+        }),
+      });
+      showToast(`تم تحديث بيانات وصلاحيات المشرف "${editingSupervisor.displayName}" بنجاح`);
+      setEditingSupervisor(null);
+      await loadUsers();
+      reload(true);
+    } catch (error) {
+      showToast(
+        error instanceof Error ? error.message : "تعذر تحديث المشرف",
         "error"
       );
     } finally {
@@ -2693,6 +2764,19 @@ function PeopleSection({
             />
             السماح بإدخال مبيعات المذاخر
           </label>
+          <label className="local-permission-check">
+            <input
+              type="checkbox"
+              checked={supervisor.canManageInventory}
+              onChange={event =>
+                setSupervisor({
+                  ...supervisor,
+                  canManageInventory: event.target.checked,
+                })
+              }
+            />
+            السماح بإدارة وتعديل المخزون
+          </label>
           <button className="local-primary" disabled={busy === "supervisor"}>
             <Plus /> إنشاء الحساب
           </button>
@@ -2780,9 +2864,20 @@ function PeopleSection({
                     ? "مدير النظام"
                     : `${governorate?.name || "بلا محافظة"} · ${allowedCompanies || "بلا شركات"}`}
                   {account.canEnterWarehouse ? " · مبيعات المذاخر مسموحة" : ""}
+                  {account.canManageInventory ? " · تعديل المخزون مسموح" : ""}
+                  {!account.active ? " · (معطّل)" : ""}
                 </span>
               </div>
               <div className="local-history-row-actions">
+                {account.role === "supervisor" && (
+                  <button
+                    type="button"
+                    className="local-plain-button"
+                    onClick={() => startEditSupervisor(account)}
+                  >
+                    <Pencil size={14} /> تعديل
+                  </button>
+                )}
                 <button
                   type="button"
                   className="local-plain-button"
@@ -2868,6 +2963,151 @@ function PeopleSection({
           <div className="local-empty">لا يوجد مندوبون مطابقون.</div>
         )}
       </div>
+
+      {editingSupervisor && (
+        <div className="local-modal-overlay" onClick={() => setEditingSupervisor(null)}>
+          <div className="local-modal-card" onClick={e => e.stopPropagation()}>
+            <div
+              className="local-section-head compact"
+              style={{
+                margin: 0,
+                paddingBottom: 12,
+                borderBottom: "1px solid #dfe8e5",
+              }}
+            >
+              <div>
+                <h2>تعديل حساب المشرف</h2>
+                <p>تعديل بيانات وصلاحيات @{editingSupervisor.username}</p>
+              </div>
+              <button
+                type="button"
+                className="local-plain-button"
+                onClick={() => setEditingSupervisor(null)}
+                title="إغلاق"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form
+              onSubmit={updateSupervisor}
+              style={{ display: "flex", flexDirection: "column", gap: 14 }}
+            >
+              <Field label="اسم المشرف">
+                <input
+                  value={editingSupervisor.displayName}
+                  onChange={event =>
+                    setEditingSupervisor({
+                      ...editingSupervisor,
+                      displayName: event.target.value,
+                    })
+                  }
+                  required
+                />
+              </Field>
+
+              <Field label="المحافظة">
+                <select
+                  value={editingSupervisor.governorateId}
+                  onChange={event =>
+                    setEditingSupervisor({
+                      ...editingSupervisor,
+                      governorateId: event.target.value,
+                    })
+                  }
+                >
+                  {reference.governorates.map(item => (
+                    <option key={item.id} value={item.id}>
+                      {item.name}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+
+              {companyChecks(editingSupervisor.companyIds, companyIds =>
+                setEditingSupervisor({ ...editingSupervisor, companyIds })
+              )}
+
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 10,
+                  background: "#f8faf9",
+                  padding: 14,
+                  borderRadius: 12,
+                  border: "1px solid #dfe8e5",
+                }}
+              >
+                <span className="local-field-label" style={{ fontWeight: 700 }}>
+                  صلاحيات المشرف
+                </span>
+                <label className="local-permission-check" style={{ margin: 0 }}>
+                  <input
+                    type="checkbox"
+                    checked={editingSupervisor.canEnterWarehouse}
+                    onChange={event =>
+                      setEditingSupervisor({
+                        ...editingSupervisor,
+                        canEnterWarehouse: event.target.checked,
+                      })
+                    }
+                  />
+                  السماح بإدخال مبيعات المذاخر
+                </label>
+
+                <label className="local-permission-check" style={{ margin: 0 }}>
+                  <input
+                    type="checkbox"
+                    checked={editingSupervisor.canManageInventory}
+                    onChange={event =>
+                      setEditingSupervisor({
+                        ...editingSupervisor,
+                        canManageInventory: event.target.checked,
+                      })
+                    }
+                  />
+                  السماح بإدارة وتعديل المخزون
+                </label>
+
+                <label className="local-permission-check" style={{ margin: 0 }}>
+                  <input
+                    type="checkbox"
+                    checked={editingSupervisor.active}
+                    onChange={event =>
+                      setEditingSupervisor({
+                        ...editingSupervisor,
+                        active: event.target.checked,
+                      })
+                    }
+                  />
+                  الحساب نشط (يمكنه تسجيل الدخول)
+                </label>
+              </div>
+
+              <div className="local-form-actions" style={{ marginTop: 8 }}>
+                <button
+                  type="submit"
+                  className="local-primary"
+                  disabled={busy === "editSupervisor"}
+                >
+                  <Check />{" "}
+                  {busy === "editSupervisor"
+                    ? "جارٍ الحفظ..."
+                    : "حفظ التعديلات"}
+                </button>
+                <button
+                  type="button"
+                  className="local-secondary"
+                  onClick={() => setEditingSupervisor(null)}
+                >
+                  <X size={15} /> إلغاء
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </section>
   );
 }

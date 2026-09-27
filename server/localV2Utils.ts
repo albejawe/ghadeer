@@ -5,6 +5,7 @@ import { getTursoClient } from "./turso.js";
 
 export type V2User = LocalUser & {
   canEnterWarehouse: boolean;
+  canManageInventory: boolean;
   companyIds: string[];
 };
 
@@ -17,6 +18,9 @@ export async function ensureV2Schema() {
     const columns = await db.execute("PRAGMA table_info(app_users)");
     if (!columns.rows.some((row) => String(row.name) === "can_enter_warehouse")) {
       await db.execute("ALTER TABLE app_users ADD COLUMN can_enter_warehouse INTEGER NOT NULL DEFAULT 0");
+    }
+    if (!columns.rows.some((row) => String(row.name) === "can_manage_inventory")) {
+      await db.execute("ALTER TABLE app_users ADD COLUMN can_manage_inventory INTEGER NOT NULL DEFAULT 0");
     }
     await db.batch([
       { sql: "CREATE TABLE IF NOT EXISTS representative_companies (representative_id TEXT NOT NULL, company_id TEXT NOT NULL, PRIMARY KEY(representative_id, company_id), FOREIGN KEY(representative_id) REFERENCES representatives(id) ON DELETE CASCADE, FOREIGN KEY(company_id) REFERENCES companies(id) ON DELETE CASCADE)", args: [] },
@@ -39,12 +43,13 @@ export async function currentUser(req: Request): Promise<V2User | null> {
   if (!base) return null;
   const db = getTursoClient();
   const [permission, companies] = await db.batch([
-    { sql: "SELECT can_enter_warehouse AS canEnterWarehouse FROM app_users WHERE id = ?", args: [base.id] },
+    { sql: "SELECT can_enter_warehouse AS canEnterWarehouse, can_manage_inventory AS canManageInventory FROM app_users WHERE id = ?", args: [base.id] },
     { sql: "SELECT company_id AS companyId FROM user_companies WHERE user_id = ? ORDER BY company_id", args: [base.id] },
   ], "read");
   return {
     ...base,
     canEnterWarehouse: base.role === "admin" || Boolean(permission.rows[0]?.canEnterWarehouse),
+    canManageInventory: base.role === "admin" || Boolean(permission.rows[0]?.canManageInventory),
     companyIds: companies.rows.map((row) => String(row.companyId)),
   };
 }

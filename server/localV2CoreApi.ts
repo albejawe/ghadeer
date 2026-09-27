@@ -113,10 +113,10 @@ router.get("/admin/users", async (req, res) => {
     if (!await requireAdmin(req, res)) return;
     const db = getTursoClient();
     const [users, links] = await db.batch([
-      { sql: "SELECT u.id, u.username, u.display_name AS displayName, u.role, u.governorate_id AS governorateId, g.name AS governorate, u.active, u.can_enter_warehouse AS canEnterWarehouse, u.created_at AS createdAt FROM app_users u LEFT JOIN governorates g ON g.id = u.governorate_id ORDER BY u.role, u.display_name", args: [] },
+      { sql: "SELECT u.id, u.username, u.display_name AS displayName, u.role, u.governorate_id AS governorateId, g.name AS governorate, u.active, u.can_enter_warehouse AS canEnterWarehouse, u.can_manage_inventory AS canManageInventory, u.created_at AS createdAt FROM app_users u LEFT JOIN governorates g ON g.id = u.governorate_id ORDER BY u.role, u.display_name", args: [] },
       { sql: "SELECT user_id AS userId, company_id AS companyId FROM user_companies ORDER BY company_id", args: [] },
     ], "read");
-    return res.json({ ok: true, users: users.rows.map((row) => ({ ...row, active: Boolean(row.active), canEnterWarehouse: Boolean(row.canEnterWarehouse), companyIds: links.rows.filter((link) => String(link.userId) === String(row.id)).map((link) => String(link.companyId)) })) });
+    return res.json({ ok: true, users: users.rows.map((row) => ({ ...row, active: Boolean(row.active), canEnterWarehouse: Boolean(row.canEnterWarehouse), canManageInventory: Boolean(row.canManageInventory), companyIds: links.rows.filter((link) => String(link.userId) === String(row.id)).map((link) => String(link.companyId)) })) });
   } catch {
     return res.status(503).json({ ok: false, error: "DATABASE_UNAVAILABLE" });
   }
@@ -135,7 +135,7 @@ router.post("/admin/users", async (req, res) => {
     const id = await createUser({ username, displayName, password, role: "supervisor", governorateId });
     const db = getTursoClient();
     await db.batch([
-      { sql: "UPDATE app_users SET can_enter_warehouse = ? WHERE id = ?", args: [req.body?.canEnterWarehouse ? 1 : 0, id] },
+      { sql: "UPDATE app_users SET can_enter_warehouse = ?, can_manage_inventory = ? WHERE id = ?", args: [req.body?.canEnterWarehouse ? 1 : 0, req.body?.canManageInventory ? 1 : 0, id] },
       ...companyIds.map((companyId) => ({ sql: "INSERT INTO user_companies (user_id, company_id) VALUES (?, ?)", args: [id, companyId] })),
     ], "write");
     await audit(admin.id, "create", "user", id, { username, governorateId, companyIds });
@@ -156,7 +156,7 @@ router.patch("/admin/users/:id", async (req, res) => {
     if (!id || !displayName || !governorateId || !companyIds.length) return res.status(400).json({ ok: false, error: "INVALID_USER" });
     const db = getTursoClient();
     await db.batch([
-      { sql: "UPDATE app_users SET display_name = ?, governorate_id = ?, active = ?, can_enter_warehouse = ?, updated_at = ? WHERE id = ? AND role = 'supervisor'", args: [displayName, governorateId, req.body?.active === false ? 0 : 1, req.body?.canEnterWarehouse ? 1 : 0, new Date().toISOString(), id] },
+      { sql: "UPDATE app_users SET display_name = ?, governorate_id = ?, active = ?, can_enter_warehouse = ?, can_manage_inventory = ?, updated_at = ? WHERE id = ? AND role = 'supervisor'", args: [displayName, governorateId, req.body?.active === false ? 0 : 1, req.body?.canEnterWarehouse ? 1 : 0, req.body?.canManageInventory ? 1 : 0, new Date().toISOString(), id] },
       { sql: "DELETE FROM user_companies WHERE user_id = ?", args: [id] },
       ...companyIds.map((companyId) => ({ sql: "INSERT INTO user_companies (user_id, company_id) VALUES (?, ?)", args: [id, companyId] })),
     ], "write");

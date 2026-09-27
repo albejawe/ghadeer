@@ -418,16 +418,19 @@ router.delete("/warehouse-batches/:id", async (req, res) => {
 
 router.get("/inventory", async (req, res) => {
   try {
-    const user = await admin(req);
-    if (!user)
-      return res.status(403).json({ ok: false, error: "ADMIN_REQUIRED" });
+    const user = await currentUser(req);
+    if (!user || (user.role !== "admin" && !user.canManageInventory))
+      return res.status(403).json({ ok: false, error: "INVENTORY_PERMISSION_REQUIRED" });
     const db = getTursoClient();
     await db.execute(
       "CREATE TABLE IF NOT EXISTS inventory_stock (material_id TEXT PRIMARY KEY, quantity INTEGER NOT NULL DEFAULT 0, updated_by TEXT NOT NULL, updated_at TEXT NOT NULL)"
     );
-    const result = await db.execute(
-      "SELECT m.id AS materialId, m.name AS material, m.unit_price AS unitPrice, c.name AS company, COALESCE(s.quantity, 0) AS quantity, s.updated_at AS updatedAt FROM materials m JOIN companies c ON c.id = m.company_id LEFT JOIN inventory_stock s ON s.material_id = m.id WHERE m.active = 1 ORDER BY c.name, m.name"
-    );
+    const companyFilter = user.role === "admin" ? "" : ` AND m.company_id IN (${user.companyIds.map(() => "?").join(",") || "''"})`;
+    const companyArgs = user.role === "admin" ? [] : user.companyIds;
+    const result = await db.execute({
+      sql: `SELECT m.id AS materialId, m.name AS material, m.unit_price AS unitPrice, c.name AS company, COALESCE(s.quantity, 0) AS quantity, s.updated_at AS updatedAt FROM materials m JOIN companies c ON c.id = m.company_id LEFT JOIN inventory_stock s ON s.material_id = m.id WHERE m.active = 1${companyFilter} ORDER BY c.name, m.name`,
+      args: companyArgs,
+    });
     return res.json({ ok: true, inventory: result.rows });
   } catch {
     return res.status(503).json({ ok: false, error: "DATABASE_UNAVAILABLE" });
@@ -436,9 +439,9 @@ router.get("/inventory", async (req, res) => {
 
 router.put("/inventory/:materialId", async (req, res) => {
   try {
-    const user = await admin(req);
-    if (!user)
-      return res.status(403).json({ ok: false, error: "ADMIN_REQUIRED" });
+    const user = await currentUser(req);
+    if (!user || (user.role !== "admin" && !user.canManageInventory))
+      return res.status(403).json({ ok: false, error: "INVENTORY_PERMISSION_REQUIRED" });
     const materialId = String(req.params.materialId || "");
     const quantity = Number(req.body?.quantity);
     if (!materialId || !Number.isInteger(quantity) || quantity < 0)
@@ -446,6 +449,15 @@ router.put("/inventory/:materialId", async (req, res) => {
         .status(400)
         .json({ ok: false, error: "INVALID_STOCK_QUANTITY" });
     const db = getTursoClient();
+    if (user.role !== "admin") {
+      const mat = await db.execute({
+        sql: "SELECT company_id FROM materials WHERE id = ?",
+        args: [materialId],
+      });
+      if (!mat.rows.length || !user.companyIds.includes(String(mat.rows[0].company_id))) {
+        return res.status(403).json({ ok: false, error: "COMPANY_NOT_AUTHORIZED" });
+      }
+    }
     await db.execute(
       "CREATE TABLE IF NOT EXISTS inventory_stock (material_id TEXT PRIMARY KEY, quantity INTEGER NOT NULL DEFAULT 0, updated_by TEXT NOT NULL, updated_at TEXT NOT NULL)"
     );
