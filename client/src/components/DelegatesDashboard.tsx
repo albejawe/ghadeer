@@ -474,11 +474,12 @@ export function DelegatesDashboard({
         <button
           type="button"
           className="local-btn-excel-export"
+          style={{ color: "#ffffff" }}
           onClick={handleExportExcel}
           title="تصدير الإحصائيات الكاملة إلى ملف إكسل منسق للشركات"
         >
-          <FileSpreadsheet size={16} />
-          <span>تصدير إحصائيات Excel</span>
+          <FileSpreadsheet size={16} color="#ffffff" />
+          <span style={{ color: "#ffffff" }}>تصدير إحصائيات Excel</span>
         </button>
       </div>{" "}
       <div className="local-dashboard-filters">
