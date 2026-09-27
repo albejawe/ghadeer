@@ -1,5 +1,6 @@
-import { BarChart3, MapPin, Package, Target, Users } from "lucide-react";
+import { BarChart3, FileSpreadsheet, MapPin, Package, Target, Users } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { buildStatisticsExcelHtml, downloadExcelFile } from "../lib/exportUtils";
 type Ref = {
   governorates: { id: string; name: string }[];
   companies: { id: string; name: string }[];
@@ -64,12 +65,14 @@ export function DelegatesDashboard({
   warehouse,
   batches,
   targets,
+  onMessage,
 }: {
   reference: Ref;
   sales: Sale[];
   warehouse: Legacy[];
   batches: Batch[];
   targets: TargetRecord[];
+  onMessage?: (text: string, type?: "success" | "error" | "info") => void;
 }) {
   const now = new Date();
   const current = datePrefix(now);
@@ -319,6 +322,100 @@ export function DelegatesDashboard({
               : 0,
           };
         });
+
+  const handleExportExcel = () => {
+    try {
+      const activeGov = reference.governorates.find(
+        g => g.id === filters.governorateId
+      )?.name;
+      const activeComp = reference.companies.find(
+        c => c.id === filters.companyId
+      )?.name;
+      const activeRep = filters.representativeId;
+      const activeMat = reference.materials.find(
+        m => m.id === filters.materialId
+      )?.name;
+
+      const excelHtml = buildStatisticsExcelHtml({
+        periodLabel: label,
+        activeFilters: {
+          governorate: activeGov,
+          company: activeComp,
+          representative: activeRep,
+          material: activeMat,
+        },
+        kpis: {
+          warehouseUnits,
+          warehouseAmount,
+          repUnits,
+          repAmount,
+          directUnits,
+          salesCount: scopedSales.length,
+        },
+        targetRows: targetRows.map(r => ({
+          governorate: r.governorate,
+          targetQuantity: r.targetQuantity,
+          sold: r.sold,
+          percent: r.percent,
+        })),
+        repRanking: repRanking.map(r => ({
+          name: r.name,
+          quantity: r.quantity,
+          amount: r.amount,
+          percent: repUnits
+            ? Number(((r.quantity / repUnits) * 100).toFixed(1))
+            : 0,
+        })),
+        govRanking: govRanking.map(r => ({
+          name: r.name,
+          quantity: r.quantity,
+          amount: r.amount,
+          percent: warehouseUnits
+            ? Number(((r.quantity / warehouseUnits) * 100).toFixed(1))
+            : 0,
+        })),
+        materialRanking: materialRanking.map(r => ({
+          name: r.name,
+          quantity: r.quantity,
+          amount: r.amount,
+          percent: warehouseUnits
+            ? Number(((r.quantity / warehouseUnits) * 100).toFixed(1))
+            : 0,
+        })),
+        sales: scopedSales.map(sale => ({
+          saleDate: sale.saleDate,
+          governorate: sale.governorate,
+          representative: sale.representative,
+          company: sale.company,
+          material: sale.material,
+          quantity: sale.quantity,
+          unitPrice: Math.round(sale.totalAmount / (sale.quantity || 1)),
+          totalAmount: sale.totalAmount,
+        })),
+        batches: scopedBatches.flatMap(b =>
+          b.items.map(item => ({
+            saleDate: b.saleDate,
+            governorate:
+              reference.governorates.find(g => g.id === b.governorateId)?.name ||
+              b.governorateId,
+            company: item.company,
+            material: item.material,
+            quantity: item.quantity,
+            unitPrice: Math.round(item.totalAmount / (item.quantity || 1)),
+            totalAmount: item.totalAmount,
+          }))
+        ),
+      });
+
+      const safePeriod = label.replace(/[^\w\u0600-\u06FF-]/g, "_");
+      const filename = `تقرير-إحصائيات-غدير-${safePeriod}-${new Date().toISOString().slice(0, 10)}.xls`;
+      downloadExcelFile(filename, excelHtml);
+      onMessage?.("تم تصدير تقرير الإحصائيات كملف Excel بنجاح", "success");
+    } catch {
+      onMessage?.("تعذر تصدير ملف الإكسل", "error");
+    }
+  };
+
   return (
     <section className="local-content local-dashboard">
       {" "}
@@ -374,6 +471,15 @@ export function DelegatesDashboard({
             />{" "}
           </label>{" "}
         </div>{" "}
+        <button
+          type="button"
+          className="local-btn-excel-export"
+          onClick={handleExportExcel}
+          title="تصدير الإحصائيات الكاملة إلى ملف إكسل منسق للشركات"
+        >
+          <FileSpreadsheet size={16} />
+          <span>تصدير إحصائيات Excel</span>
+        </button>
       </div>{" "}
       <div className="local-dashboard-filters">
         {" "}

@@ -886,6 +886,7 @@ function AppShell({
           warehouse={warehouse}
           batches={warehouseBatches}
           targets={targets}
+          onMessage={showToast}
         />
       )}
       {(section === "sales" || (user.role !== "admin" && section !== "warehouse" && section !== "inventory")) && (

@@ -922,6 +922,30 @@
   font: inherit;
   direction: ltr;
 }
+.local-btn-excel-export {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: linear-gradient(135deg, #0f766e 0%, #0d9488 100%);
+  color: #ffffff;
+  border: 1px solid #0f766e;
+  border-radius: 10px;
+  padding: 8px 16px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 2px 4px rgba(15, 118, 110, 0.15);
+  transition: all 0.2s ease-in-out;
+  white-space: nowrap;
+}
+.local-btn-excel-export:hover {
+  background: linear-gradient(135deg, #0d9488 0%, #14b8a6 100%);
+  box-shadow: 0 4px 10px rgba(15, 118, 110, 0.25);
+  transform: translateY(-1px);
+}
+.local-btn-excel-export:active {
+  transform: translateY(0);
+}
 .local-notifications {
   position: relative;
 }

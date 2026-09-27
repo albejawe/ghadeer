@@ -1,5 +1,6 @@
 import { Download, Pencil, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
+import { buildSalesHistoryExcelHtml, downloadExcelFile } from "../lib/exportUtils";
 
 type Sale = {
   id: string;
@@ -197,86 +198,61 @@ export function SalesHistory({
   const exportReport = () => {
     if (!filtered.length && !filteredBatches.length && !filteredLegacy.length)
       return onMessage("لا توجد بيانات لتصديرها", "info");
-    const rows: Array<Array<string | number>> = [
-      ["تقرير مبيعات غدير", periodLabel],
-      ["إجمالي خروج المذخر", warehouseUnits, warehouseAmount],
-      ["مبيعات المندوبين", filteredUnits, filteredAmount],
-      ["صافي البيع المباشر", directUnits],
-      [],
-      ["مبيعات المندوبين"],
-      [
-        "التاريخ",
-        "المحافظة",
-        "المندوب",
-        "الشركة",
-        "المادة",
-        "القطع",
-        "سعر القطعة",
-        "الإجمالي",
-        "السوبرفايزر",
-      ],
-      ...filtered.map(sale => [
-        sale.saleDate,
-        sale.governorate,
-        sale.representative,
-        sale.company,
-        sale.material,
-        sale.quantity,
-        sale.unitPrice,
-        sale.totalAmount,
-        sale.supervisor,
-      ]),
-      [],
-      ["مبيعات المذاخر"],
-      [
-        "التاريخ",
-        "المحافظة",
-        "الشركة",
-        "المادة",
-        "القطع",
-        "سعر القطعة",
-        "الإجمالي",
-        "أنشأها",
-        "الملاحظة",
-      ],
-      ...filteredBatches.flatMap(batch =>
-        batch.items.map(item => [
-          batch.saleDate,
-          batch.governorate,
-          item.company,
-          item.material,
-          item.quantity,
-          item.unitPrice,
-          item.totalAmount,
-          batch.createdByName || "",
-          batch.note || "",
-        ])
+
+    const excelHtml = buildSalesHistoryExcelHtml({
+      periodLabel,
+      activeFilters: {
+        governorate: filters.governorate,
+        representative: filters.representative,
+        company: filters.supervisor,
+        material: filters.material,
+      },
+      kpis: {
+        warehouseUnits,
+        warehouseAmount,
+        repUnits: filteredUnits,
+        repAmount: filteredAmount,
+        directUnits,
+        salesCount: filtered.length,
+      },
+      sales: filtered.map(sale => ({
+        saleDate: sale.saleDate,
+        governorate: sale.governorate,
+        representative: sale.representative,
+        company: sale.company,
+        material: sale.material,
+        quantity: sale.quantity,
+        unitPrice: sale.unitPrice,
+        totalAmount: sale.totalAmount,
+        supervisor: sale.supervisor,
+      })),
+      batches: filteredBatches.flatMap(batch =>
+        batch.items.map(item => ({
+          saleDate: batch.saleDate,
+          governorate: batch.governorate,
+          company: item.company,
+          material: item.material,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          totalAmount: item.totalAmount,
+          createdByName: batch.createdByName,
+          note: batch.note,
+        }))
       ),
-      ...filteredLegacy.map(item => [
-        item.saleDate,
-        item.governorate,
-        "",
-        "إدخال قديم بلا تفاصيل مواد",
-        item.quantity,
-        "",
-        Number(item.amount || 0),
-        item.createdByName,
-        item.note || "",
-      ]),
-    ];
-    const csv = rows
-      .map(row =>
-        row.map(value => `"${String(value).replaceAll('"', '""')}"`).join(",")
-      )
-      .join("\n");
-    const url = URL.createObjectURL(
-      new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" })
-    );
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `ghadeer-sales-${periodLabel.replaceAll(" ", "-")}.csv`;
-    link.click();
-    URL.revokeObjectURL(url);
+      legacy: filteredLegacy.map(item => ({
+        saleDate: item.saleDate,
+        governorate: item.governorate,
+        quantity: item.quantity,
+        amount: item.amount,
+        note: item.note,
+        createdByName: item.createdByName,
+      })),
+    });
+
+    const safePeriod = periodLabel.replace(/[^\w\u0600-\u06FF-]/g, "_");
+    const filename = `تقرير-مبيعات-غدير-${safePeriod}-${new Date().toISOString().slice(0, 10)}.xls`;
+    downloadExcelFile(filename, excelHtml);
+    onMessage("تم تصدير سجل المبيعات كملف Excel منسق بنجاح", "success");
   };
 
   const saveEdit = async () => {
