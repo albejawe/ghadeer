@@ -119,7 +119,41 @@ export function TargetsSection({
   // Local state for material items per governorate: { [govId]: [{ materialId, targetQuantity }] }
   const [govItems, setGovItems] = useState<
     Record<string, Array<{ materialId: string; targetQuantity: number | string }>>
-  >({});
+  >(() => {
+    const initialMap: Record<
+      string,
+      Array<{ materialId: string; targetQuantity: number | string }>
+    > = {};
+    for (const t of records || []) {
+      if (t.items && t.items.length > 0) {
+        initialMap[t.governorateId] = t.items.map(i => ({
+          materialId: i.materialId,
+          targetQuantity: i.targetQuantity,
+        }));
+      }
+    }
+    return initialMap;
+  });
+
+  // Sync from records prop when it changes
+  useEffect(() => {
+    if (records && records.length > 0) {
+      setGovItems(prev => {
+        const next = { ...prev };
+        let hasChanges = false;
+        for (const t of records) {
+          if (t.items && t.items.length > 0 && !next[t.governorateId]?.length) {
+            next[t.governorateId] = t.items.map(i => ({
+              materialId: i.materialId,
+              targetQuantity: i.targetQuantity,
+            }));
+            hasChanges = true;
+          }
+        }
+        return hasChanges ? next : prev;
+      });
+    }
+  }, [records]);
 
   // Which governorate currently has the "Add Material" dropdown open
   const [openAddDropdown, setOpenAddDropdown] = useState<string | null>(null);
@@ -254,6 +288,18 @@ export function TargetsSection({
       );
       if (refreshed?.targets) {
         setTargets(refreshed.targets);
+        setGovItems(prev => {
+          const next = { ...prev };
+          for (const t of refreshed.targets) {
+            if (t.items) {
+              next[t.governorateId] = t.items.map(i => ({
+                materialId: i.materialId,
+                targetQuantity: i.targetQuantity,
+              }));
+            }
+          }
+          return next;
+        });
       }
       showToast(`✓ تم حفظ خطة ${govObj?.name || ""} بنجاح`, "success");
       reload(true);

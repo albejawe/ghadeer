@@ -237,11 +237,69 @@ router.get("/targets", async (req, res) => {
       where.push("t.governorate_id = ?");
       args.push(user.governorateId || "");
     }
-    const result = await getTursoClient().execute({
+    const db = getTursoClient();
+
+    // 1. Fetch monthly_targets rows
+    const result = await db.execute({
       sql: `SELECT t.id, t.governorate_id AS governorateId, g.name AS governorate, t.year, t.month, t.target_quantity AS targetQuantity, t.target_amount AS targetAmount, t.created_by AS createdBy, u.display_name AS createdByName, t.updated_at AS updatedAt FROM monthly_targets t JOIN governorates g ON g.id = t.governorate_id JOIN app_users u ON u.id = t.created_by WHERE ${where.join(" AND ")} ORDER BY t.year DESC, t.month DESC, g.name`,
       args,
     });
-    return res.json({ ok: true, targets: result.rows });
+
+    // 2. Fetch material targets for this period
+    const matWhere = ["1 = 1"];
+    const matArgs: Array<string | number> = [];
+    if (Number.isInteger(year)) {
+      matWhere.push("mt.year = ?");
+      matArgs.push(year);
+    }
+    if (Number.isInteger(month)) {
+      matWhere.push("mt.month = ?");
+      matArgs.push(month);
+    }
+    if (user.role !== "admin") {
+      matWhere.push("mt.governorate_id = ?");
+      matArgs.push(user.governorateId || "");
+    }
+
+    const itemsResult = await db.execute({
+      sql: `SELECT mt.id, mt.governorate_id AS governorateId, mt.material_id AS materialId, m.name AS material, c.name AS company, m.unit_price AS unitPrice, mt.target_quantity AS targetQuantity FROM monthly_material_targets mt JOIN materials m ON m.id = mt.material_id JOIN companies c ON c.id = m.company_id WHERE ${matWhere.join(" AND ")} ORDER BY c.name, m.name`,
+      args: matArgs,
+    });
+
+    // Group items by governorateId
+    const itemsByGov = new Map<string, Array<{ materialId: string; material: string; company: string; unitPrice: number; targetQuantity: number }>>();
+    for (const row of itemsResult.rows) {
+      const gId = String(row.governorateId);
+      if (!itemsByGov.has(gId)) itemsByGov.set(gId, []);
+      itemsByGov.get(gId)!.push({
+        materialId: String(row.materialId),
+        material: String(row.material),
+        company: String(row.company),
+        unitPrice: Number(row.unitPrice || 0),
+        targetQuantity: Number(row.targetQuantity || 0),
+      });
+    }
+
+    // Merge: attach items and dynamically calculate totalQuantity & targetAmount
+    const targets = result.rows.map((row) => {
+      const gId = String(row.governorateId);
+      const items = itemsByGov.get(gId) || [];
+      const hasItems = items.length > 0;
+      const targetQuantity = hasItems
+        ? items.reduce((sum, item) => sum + item.targetQuantity, 0)
+        : Number(row.targetQuantity || 0);
+      const targetAmount = hasItems
+        ? items.reduce((sum, item) => sum + item.targetQuantity * item.unitPrice, 0)
+        : (row.targetAmount != null ? Number(row.targetAmount) : null);
+      return {
+        ...row,
+        targetQuantity,
+        targetAmount,
+        items,
+      };
+    });
+
+    return res.json({ ok: true, targets });
   } catch {
     return res.status(503).json({ ok: false, error: "DATABASE_UNAVAILABLE" });
   }

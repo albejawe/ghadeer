@@ -142,15 +142,33 @@ await runTest("فحص استرجاع الأهداف وتجميع المواد ع
     },
   ], "write");
 
-  // Query using the exact same query used in localV2OperationsApi
+  // Query using the exact same query used in localAdminApi / localV2OperationsApi
+  const targetsResult = await db.execute({
+    sql: `SELECT t.id, t.governorate_id AS governorateId, g.name AS governorate, t.year, t.month, t.target_quantity AS targetQuantity, t.target_amount AS targetAmount, t.created_by AS createdBy, u.display_name AS createdByName, t.updated_at AS updatedAt FROM monthly_targets t JOIN governorates g ON g.id = t.governorate_id JOIN app_users u ON u.id = t.created_by WHERE t.year = ? AND t.month = ? ORDER BY g.name`,
+    args: [testYear, testMonth],
+  });
+
   const itemsRes = await db.execute({
     sql: `SELECT mt.id, mt.governorate_id AS governorateId, mt.material_id AS materialId, m.name AS material, c.name AS company, m.unit_price AS unitPrice, mt.target_quantity AS targetQuantity FROM monthly_material_targets mt JOIN materials m ON m.id = mt.material_id JOIN companies c ON c.id = m.company_id WHERE mt.year = ? AND mt.month = ? ORDER BY c.name, m.name`,
     args: [testYear, testMonth],
   });
 
   if (itemsRes.rows.length !== 2) throw new Error(`Expected 2 items, got ${itemsRes.rows.length}`);
-  const item1 = itemsRes.rows[0];
-  if (!item1.material || !item1.company || item1.unitPrice == null) throw new Error("Item details missing");
+
+  const itemsByGov = new Map();
+  for (const row of itemsRes.rows) {
+    const gId = String(row.governorateId);
+    if (!itemsByGov.has(gId)) itemsByGov.set(gId, []);
+    itemsByGov.get(gId).push(row);
+  }
+
+  const merged = targetsResult.rows.map(row => ({
+    ...row,
+    items: itemsByGov.get(String(row.governorateId)) || [],
+  }));
+
+  if (merged.length !== 1) throw new Error("Expected 1 governorate target");
+  if (!merged[0].items || merged[0].items.length !== 2) throw new Error("Expected 2 items in merged target");
 
   // Clean up
   await db.batch([
