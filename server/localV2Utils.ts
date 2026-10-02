@@ -29,6 +29,9 @@ export async function ensureV2Schema() {
       { sql: "CREATE INDEX IF NOT EXISTS idx_sales_representative_period ON sales(representative_id, sale_date)", args: [] },
       { sql: "CREATE INDEX IF NOT EXISTS idx_warehouse_period ON warehouse_monthly_sales(year, month, governorate_id)", args: [] },
       { sql: "CREATE INDEX IF NOT EXISTS idx_targets_period ON monthly_targets(year, month, governorate_id)", args: [] },
+      // Per-governorate inventory
+      { sql: "CREATE TABLE IF NOT EXISTS inventory_stock_v2 (material_id TEXT NOT NULL, governorate_id TEXT NOT NULL, quantity INTEGER NOT NULL DEFAULT 0, updated_by TEXT NOT NULL, updated_at TEXT NOT NULL, PRIMARY KEY(material_id, governorate_id), FOREIGN KEY(governorate_id) REFERENCES governorates(id))", args: [] },
+      { sql: "CREATE INDEX IF NOT EXISTS idx_inv_governorate ON inventory_stock_v2(governorate_id)", args: [] },
     ], "write");
   })().catch((error) => {
     schemaPromise = null;

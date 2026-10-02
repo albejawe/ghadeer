@@ -422,16 +422,51 @@ router.get("/inventory", async (req, res) => {
     if (!user || (user.role !== "admin" && !user.canManageInventory))
       return res.status(403).json({ ok: false, error: "INVENTORY_PERMISSION_REQUIRED" });
     const db = getTursoClient();
-    await db.execute(
-      "CREATE TABLE IF NOT EXISTS inventory_stock (material_id TEXT PRIMARY KEY, quantity INTEGER NOT NULL DEFAULT 0, updated_by TEXT NOT NULL, updated_at TEXT NOT NULL)"
-    );
+
+    // Build governorate filter
+    const rawGovs = String(req.query.governorates || "").trim();
+    const selectedGovIds = rawGovs ? rawGovs.split(",").map(s => s.trim()).filter(Boolean) : [];
+
+    // Supervisor is restricted to their assigned governorate only
+    let allowedGovIds: string[] | null = null;
+    if (user.role !== "admin") {
+      const govId = user.governorateId;
+      if (!govId) return res.status(403).json({ ok: false, error: "NO_GOVERNORATE_ASSIGNED" });
+      allowedGovIds = [govId];
+    }
+
+    // If admin filtered to specific govs, apply that; otherwise all allowed govs
+    const govFilter = allowedGovIds
+      ? `AND g.id IN (${allowedGovIds.map(() => "?").join(",")})`
+      : selectedGovIds.length
+        ? `AND g.id IN (${selectedGovIds.map(() => "?").join(",")})`
+        : "";
+    const govArgs = allowedGovIds ?? (selectedGovIds.length ? selectedGovIds : []);
+
+    // Company filter (supervisor sees their companies only)
     const companyFilter = user.role === "admin" ? "" : ` AND m.company_id IN (${user.companyIds.map(() => "?").join(",") || "''"})`;
     const companyArgs = user.role === "admin" ? [] : user.companyIds;
+
+    // Fetch all governorates (for UI chips)
+    const govsResult = await db.execute("SELECT id, name FROM governorates WHERE active = 1 ORDER BY name");
+
+    // Fetch stock per (material, governorate)
     const result = await db.execute({
-      sql: `SELECT m.id AS materialId, m.name AS material, m.unit_price AS unitPrice, c.name AS company, COALESCE(s.quantity, 0) AS quantity, s.updated_at AS updatedAt FROM materials m JOIN companies c ON c.id = m.company_id LEFT JOIN inventory_stock s ON s.material_id = m.id WHERE m.active = 1${companyFilter} ORDER BY c.name, m.name`,
-      args: companyArgs,
+      sql: `SELECT
+              m.id AS materialId, m.name AS material,
+              m.unit_price AS unitPrice, c.name AS company,
+              g.id AS governorateId, g.name AS governorate,
+              COALESCE(s.quantity, 0) AS quantity, s.updated_at AS updatedAt
+            FROM materials m
+            JOIN companies c ON c.id = m.company_id
+            JOIN governorates g ON g.active = 1 ${govFilter}
+            LEFT JOIN inventory_stock_v2 s ON s.material_id = m.id AND s.governorate_id = g.id
+            WHERE m.active = 1${companyFilter}
+            ORDER BY g.name, c.name, m.name`,
+      args: [...govArgs, ...companyArgs],
     });
-    return res.json({ ok: true, inventory: result.rows });
+
+    return res.json({ ok: true, inventory: result.rows, governorates: govsResult.rows });
   } catch {
     return res.status(503).json({ ok: false, error: "DATABASE_UNAVAILABLE" });
   }
@@ -442,47 +477,42 @@ router.put("/inventory/:materialId", async (req, res) => {
     const user = await currentUser(req);
     if (!user || (user.role !== "admin" && !user.canManageInventory))
       return res.status(403).json({ ok: false, error: "INVENTORY_PERMISSION_REQUIRED" });
+
     const materialId = String(req.params.materialId || "");
+    const governorateId = String(req.body?.governorateId || "");
     const quantity = Number(req.body?.quantity);
-    if (!materialId || !Number.isInteger(quantity) || quantity < 0)
-      return res
-        .status(400)
-        .json({ ok: false, error: "INVALID_STOCK_QUANTITY" });
+
+    if (!materialId || !governorateId || !Number.isInteger(quantity) || quantity < 0)
+      return res.status(400).json({ ok: false, error: "INVALID_INPUT" });
+
     const db = getTursoClient();
+
+    // Supervisor: must edit only their governorate
     if (user.role !== "admin") {
-      const mat = await db.execute({
-        sql: "SELECT company_id FROM materials WHERE id = ?",
-        args: [materialId],
-      });
-      if (!mat.rows.length || !user.companyIds.includes(String(mat.rows[0].company_id))) {
+      if (user.governorateId !== governorateId)
+        return res.status(403).json({ ok: false, error: "GOVERNORATE_NOT_AUTHORIZED" });
+      const mat = await db.execute({ sql: "SELECT company_id FROM materials WHERE id = ?", args: [materialId] });
+      if (!mat.rows.length || !user.companyIds.includes(String(mat.rows[0].company_id)))
         return res.status(403).json({ ok: false, error: "COMPANY_NOT_AUTHORIZED" });
-      }
     }
-    await db.execute(
-      "CREATE TABLE IF NOT EXISTS inventory_stock (material_id TEXT PRIMARY KEY, quantity INTEGER NOT NULL DEFAULT 0, updated_by TEXT NOT NULL, updated_at TEXT NOT NULL)"
-    );
+
+    // Validate governorate exists
+    const govCheck = await db.execute({ sql: "SELECT id FROM governorates WHERE id = ? AND active = 1", args: [governorateId] });
+    if (!govCheck.rows.length)
+      return res.status(400).json({ ok: false, error: "GOVERNORATE_NOT_FOUND" });
+
     const now = new Date().toISOString();
-    await db.batch(
-      [
-        {
-          sql: "INSERT INTO inventory_stock (material_id, quantity, updated_by, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT(material_id) DO UPDATE SET quantity = excluded.quantity, updated_by = excluded.updated_by, updated_at = excluded.updated_at",
-          args: [materialId, quantity, user.id, now],
-        },
-        {
-          sql: "INSERT INTO audit_logs (id, actor_id, action, entity_type, entity_id, details_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-          args: [
-            randomUUID(),
-            user.id,
-            "update",
-            "inventory_stock",
-            materialId,
-            JSON.stringify({ quantity }),
-            now,
-          ],
-        },
-      ],
-      "write"
-    );
+    await db.batch([
+      {
+        sql: "INSERT INTO inventory_stock_v2 (material_id, governorate_id, quantity, updated_by, updated_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(material_id, governorate_id) DO UPDATE SET quantity = excluded.quantity, updated_by = excluded.updated_by, updated_at = excluded.updated_at",
+        args: [materialId, governorateId, quantity, user.id, now],
+      },
+      {
+        sql: "INSERT INTO audit_logs (id, actor_id, action, entity_type, entity_id, details_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        args: [randomUUID(), user.id, "update", "inventory_stock_v2", `${materialId}|${governorateId}`, JSON.stringify({ quantity, governorateId }), now],
+      },
+    ], "write");
+
     return res.json({ ok: true, quantity });
   } catch {
     return res.status(503).json({ ok: false, error: "INVENTORY_SAVE_FAILED" });
