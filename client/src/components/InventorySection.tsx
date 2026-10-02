@@ -1,5 +1,5 @@
-import { Save, Search, Package, X, ChevronDown } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { Save, Search, Package, ChevronDown, AlertTriangle } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 type Stock = {
   materialId: string;
@@ -27,9 +27,88 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
   return payload;
 }
 
-// Unique key for a (material, governorate) pair
 const rowKey = (materialId: string, governorateId: string) =>
   `${materialId}::${governorateId}`;
+
+// ── Confirm dialog ────────────────────────────────────────────────────────────
+function ConfirmDialog({
+  material,
+  governorate,
+  oldQty,
+  newQty,
+  onConfirm,
+  onCancel,
+  saving,
+}: {
+  material: string;
+  governorate: string;
+  oldQty: number;
+  newQty: number;
+  onConfirm: () => void;
+  onCancel: () => void;
+  saving: boolean;
+}) {
+  return (
+    <div
+      style={{
+        position: "fixed", inset: 0, zIndex: 999,
+        background: "rgba(0,0,0,.45)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+      }}
+      onClick={e => { if (e.target === e.currentTarget) onCancel(); }}
+    >
+      <div style={{
+        background: "var(--local-card, #fff)",
+        borderRadius: 16,
+        padding: "28px 32px",
+        maxWidth: 400, width: "90%",
+        boxShadow: "0 12px 40px rgba(0,0,0,.2)",
+        textAlign: "center",
+        direction: "rtl",
+      }}>
+        <div style={{ marginBottom: 14 }}>
+          <AlertTriangle size={36} color="#f59e0b" style={{ marginBottom: 8 }} />
+          <h3 style={{ margin: "0 0 6px", fontSize: 17, fontWeight: 700 }}>تأكيد حفظ المخزون</h3>
+          <p style={{ margin: 0, fontSize: 14, color: "var(--local-muted, #666)", lineHeight: 1.6 }}>
+            <strong>{material}</strong><br />
+            📍 {governorate}<br /><br />
+            الكمية الحالية: <strong style={{ color: "var(--local-muted)" }}>{fmt(oldQty)} قطعة</strong><br />
+            الكمية الجديدة: <strong style={{ color: "var(--local-accent, #16a34a)", fontSize: 16 }}>{fmt(newQty)} قطعة</strong>
+          </p>
+        </div>
+        <div style={{ display: "flex", gap: 10, justifyContent: "center", marginTop: 20 }}>
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={saving}
+            style={{
+              flex: 1, padding: "10px 0", borderRadius: 10,
+              border: "1.5px solid var(--local-border, #d1d5db)",
+              background: "transparent", color: "var(--local-text, #111)",
+              fontSize: 14, cursor: "pointer", fontFamily: "inherit",
+            }}
+          >
+            إلغاء
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={saving}
+            style={{
+              flex: 1, padding: "10px 0", borderRadius: 10,
+              border: "none",
+              background: "var(--local-accent, #16a34a)", color: "#fff",
+              fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
+              opacity: saving ? 0.7 : 1,
+            }}
+          >
+            {saving ? "جاري الحفظ…" : "✓ تأكيد الحفظ"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export function InventorySection({
   showToast,
@@ -41,11 +120,28 @@ export function InventorySection({
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [search, setSearch] = useState("");
   const [company, setCompany] = useState("");
-  // Multi-select governorates (empty = all)
-  const [selGovs, setSelGovs] = useState<string[]>([]);
+  // "" = كل المحافظات (read-only mode), govId = محافظة محددة (edit mode)
+  const [selectedGov, setSelectedGov] = useState("");
   const [saving, setSaving] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showGovMenu, setShowGovMenu] = useState(false);
   const [showCompanyMenu, setShowCompanyMenu] = useState(false);
+  // Confirm dialog state
+  const [confirmStock, setConfirmStock] = useState<Stock | null>(null);
+  const govMenuRef = useRef<HTMLDivElement>(null);
+  const companyMenuRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdowns on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (govMenuRef.current && !govMenuRef.current.contains(e.target as Node))
+        setShowGovMenu(false);
+      if (companyMenuRef.current && !companyMenuRef.current.contains(e.target as Node))
+        setShowCompanyMenu(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
 
   const load = async () => {
     setLoading(true);
@@ -53,7 +149,6 @@ export function InventorySection({
       const data = await api<{ inventory: Stock[]; governorates: Governorate[] }>("/inventory");
       setRecords(data.inventory);
       setAllGovs(data.governorates);
-      // Initialize drafts from fetched quantities
       setDrafts(
         Object.fromEntries(
           data.inventory.map(item => [
@@ -76,19 +171,14 @@ export function InventorySection({
     [records]
   );
 
-  // Toggle a governorate chip
-  const toggleGov = (id: string) => {
-    setSelGovs(prev =>
-      prev.includes(id) ? prev.filter(g => g !== id) : [...prev, id]
-    );
-  };
-
-  const clearGovs = () => setSelGovs([]);
+  // editMode = a specific governorate is selected
+  const editMode = selectedGov !== "";
+  const selectedGovName = allGovs.find(g => g.id === selectedGov)?.name ?? "";
 
   // Filtered records
   const shown = useMemo(() => {
     return records.filter(item => {
-      if (selGovs.length && !selGovs.includes(item.governorateId)) return false;
+      if (selectedGov && item.governorateId !== selectedGov) return false;
       if (company && item.company !== company) return false;
       if (search.trim()) {
         const q = search.trim().toLowerCase();
@@ -97,24 +187,26 @@ export function InventorySection({
       }
       return true;
     });
-  }, [records, selGovs, company, search]);
+  }, [records, selectedGov, company, search]);
 
   // Group by governorate
   const grouped = useMemo(() => {
-    const map = new Map<string, { govName: string; items: Stock[] }>();
+    const map = new Map<string, { govName: string; govId: string; items: Stock[] }>();
     for (const item of shown) {
       if (!map.has(item.governorateId))
-        map.set(item.governorateId, { govName: item.governorate, items: [] });
+        map.set(item.governorateId, { govName: item.governorate, govId: item.governorateId, items: [] });
       map.get(item.governorateId)!.items.push(item);
     }
     return Array.from(map.values());
   }, [shown]);
 
-  const save = async (stock: Stock) => {
+  const doSave = async (stock: Stock) => {
     const key = rowKey(stock.materialId, stock.governorateId);
     const quantity = Number(drafts[key]);
-    if (!Number.isInteger(quantity) || quantity < 0)
-      return showToast("أدخل عدد قطع صحيحاً", "error");
+    if (!Number.isInteger(quantity) || quantity < 0) {
+      showToast("أدخل عدد قطع صحيحاً", "error");
+      return;
+    }
     setSaving(key);
     try {
       await api(`/inventory/${stock.materialId}`, {
@@ -133,124 +225,169 @@ export function InventorySection({
       showToast("تعذر حفظ المخزون", "error");
     } finally {
       setSaving(null);
+      setConfirmStock(null);
     }
+  };
+
+  const handleSaveClick = (stock: Stock) => {
+    const key = rowKey(stock.materialId, stock.governorateId);
+    const quantity = Number(drafts[key]);
+    if (!Number.isInteger(quantity) || quantity < 0)
+      return showToast("أدخل عدد قطع صحيحاً", "error");
+    setConfirmStock(stock);
   };
 
   const totalItems = shown.length;
   const totalQuantity = shown.reduce((sum, s) => sum + s.quantity, 0);
 
+  const dropdownBtnStyle = (active: boolean): React.CSSProperties => ({
+    display: "flex", alignItems: "center", gap: 6,
+    padding: "8px 14px", borderRadius: 8,
+    border: `1.5px solid ${active ? "var(--local-accent, #16a34a)" : "var(--local-border, #d1d5db)"}`,
+    background: active ? "var(--local-accent, #16a34a)" : "transparent",
+    color: active ? "#fff" : "var(--local-text, #111)",
+    fontSize: 13, cursor: "pointer", fontFamily: "inherit",
+    fontWeight: active ? 600 : 400,
+    transition: "all .15s",
+    minWidth: 130, justifyContent: "space-between",
+  });
+
+  const menuStyle: React.CSSProperties = {
+    position: "absolute", top: "110%", right: 0, zIndex: 200,
+    background: "var(--local-card, #fff)",
+    border: "1px solid var(--local-border, #d1d5db)",
+    borderRadius: 10, boxShadow: "0 6px 24px rgba(0,0,0,.14)",
+    minWidth: 180, overflow: "hidden",
+  };
+
+  const menuItemStyle = (active: boolean): React.CSSProperties => ({
+    display: "block", width: "100%", textAlign: "right",
+    padding: "10px 16px",
+    background: active ? "var(--local-accent, #16a34a)" : "transparent",
+    color: active ? "#fff" : "var(--local-text, #111)",
+    border: "none", cursor: "pointer", fontSize: 13, fontFamily: "inherit",
+    transition: "background .1s",
+  });
+
   return (
     <section className="local-content">
+      {/* Confirm dialog */}
+      {confirmStock && (
+        <ConfirmDialog
+          material={confirmStock.material}
+          governorate={confirmStock.governorate}
+          oldQty={confirmStock.quantity}
+          newQty={Number(drafts[rowKey(confirmStock.materialId, confirmStock.governorateId)]) || 0}
+          saving={saving === rowKey(confirmStock.materialId, confirmStock.governorateId)}
+          onConfirm={() => void doSave(confirmStock)}
+          onCancel={() => setConfirmStock(null)}
+        />
+      )}
+
       {/* Header */}
       <div className="local-section-head">
         <div>
           <span className="local-kicker">المخزون الحالي</span>
           <h2>رصيد المواد حسب المحافظة</h2>
-          <p>حدّد الرصيد الفعلي لكل مادة في كل محافظة. المشرف يعدّل محافظته فقط.</p>
+          <p>
+            اختر محافظة من القائمة للتعديل. عند اختيار "كل المحافظات" يكون العرض فقط بدون تعديل.
+          </p>
         </div>
-        <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-          <span style={{ fontSize: 13, color: "var(--local-muted)" }}>
+        <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+          <span style={{ fontSize: 13, color: "var(--local-muted, #666)" }}>
             <Package size={14} style={{ verticalAlign: "middle", marginLeft: 4 }} />
             {fmt(totalQuantity)} قطعة · {totalItems} صنف
           </span>
         </div>
       </div>
 
-      {/* Governorate chips */}
-      <div style={{ marginBottom: 12 }}>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-          <button
-            type="button"
-            onClick={clearGovs}
-            style={{
-              padding: "5px 14px",
-              borderRadius: 20,
-              border: `1.5px solid ${selGovs.length === 0 ? "var(--local-accent)" : "var(--local-border)"}`,
-              background: selGovs.length === 0 ? "var(--local-accent)" : "transparent",
-              color: selGovs.length === 0 ? "#fff" : "var(--local-text)",
-              fontSize: 13,
-              cursor: "pointer",
-              fontFamily: "inherit",
-              transition: "all .15s",
-            }}
-          >
-            كل المحافظات
-          </button>
-          {allGovs.map(gov => {
-            const active = selGovs.includes(gov.id);
-            return (
-              <button
-                key={gov.id}
-                type="button"
-                onClick={() => toggleGov(gov.id)}
-                style={{
-                  padding: "5px 14px",
-                  borderRadius: 20,
-                  border: `1.5px solid ${active ? "var(--local-accent)" : "var(--local-border)"}`,
-                  background: active ? "var(--local-accent)" : "transparent",
-                  color: active ? "#fff" : "var(--local-text)",
-                  fontSize: 13,
-                  cursor: "pointer",
-                  fontFamily: "inherit",
-                  transition: "all .15s",
-                  position: "relative",
-                }}
-              >
-                {gov.name}
-                {active && (
-                  <X size={11} style={{ marginRight: 4, verticalAlign: "middle" }} />
-                )}
-              </button>
-            );
-          })}
+      {/* Edit mode notice */}
+      {!editMode && (
+        <div style={{
+          background: "rgba(245, 158, 11, 0.1)",
+          border: "1.5px solid #f59e0b",
+          borderRadius: 10, padding: "10px 16px",
+          marginBottom: 14, fontSize: 13,
+          color: "#92400e", display: "flex", alignItems: "center", gap: 8,
+          direction: "rtl",
+        }}>
+          <AlertTriangle size={15} color="#f59e0b" />
+          وضع العرض فقط — اختر محافظة محددة لتفعيل التعديل
         </div>
-      </div>
+      )}
 
       {/* Filters row */}
-      <div className="local-history-filters" style={{ marginBottom: 16 }}>
+      <div className="local-history-filters" style={{ marginBottom: 18, gap: 10 }}>
+        {/* Search */}
         <label className="local-search">
           <Search size={15} />
           <input
             value={search}
             onChange={e => setSearch(e.target.value)}
-            placeholder="بحث باسم المادة أو المحافظة"
+            placeholder="بحث باسم المادة"
           />
         </label>
-        <div style={{ position: "relative" }}>
+
+        {/* Governorate dropdown */}
+        <div ref={govMenuRef} style={{ position: "relative" }}>
+          <button
+            type="button"
+            onClick={() => setShowGovMenu(v => !v)}
+            style={dropdownBtnStyle(editMode)}
+          >
+            <span>{editMode ? selectedGovName : "كل المحافظات"}</span>
+            <ChevronDown size={13} />
+          </button>
+          {showGovMenu && (
+            <div style={menuStyle}>
+              <button
+                type="button"
+                onClick={() => { setSelectedGov(""); setShowGovMenu(false); }}
+                style={menuItemStyle(!editMode)}
+              >
+                كل المحافظات
+              </button>
+              {allGovs.map(gov => (
+                <button
+                  key={gov.id}
+                  type="button"
+                  onClick={() => { setSelectedGov(gov.id); setShowGovMenu(false); }}
+                  style={menuItemStyle(selectedGov === gov.id)}
+                >
+                  {gov.name}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Company dropdown */}
+        <div ref={companyMenuRef} style={{ position: "relative" }}>
           <button
             type="button"
             onClick={() => setShowCompanyMenu(v => !v)}
-            style={{
-              display: "flex", alignItems: "center", gap: 6,
-              padding: "7px 14px", borderRadius: 8,
-              border: "1.5px solid var(--local-border)",
-              background: company ? "var(--local-accent-soft, #e6f4ea)" : "transparent",
-              color: "var(--local-text)", fontSize: 13, cursor: "pointer",
-              fontFamily: "inherit",
-            }}
+            style={dropdownBtnStyle(!!company)}
           >
-            {company || "كل الشركات"} <ChevronDown size={13} />
+            <span>{company || "كل الشركات"}</span>
+            <ChevronDown size={13} />
           </button>
           {showCompanyMenu && (
-            <div style={{
-              position: "absolute", top: "110%", right: 0, zIndex: 50,
-              background: "var(--local-card)", border: "1px solid var(--local-border)",
-              borderRadius: 10, boxShadow: "0 4px 20px rgba(0,0,0,.12)",
-              minWidth: 170, overflow: "hidden",
-            }}>
-              {["", ...companies].map(c => (
+            <div style={menuStyle}>
+              <button
+                type="button"
+                onClick={() => { setCompany(""); setShowCompanyMenu(false); }}
+                style={menuItemStyle(!company)}
+              >
+                كل الشركات
+              </button>
+              {companies.map(c => (
                 <button
                   key={c}
                   type="button"
                   onClick={() => { setCompany(c); setShowCompanyMenu(false); }}
-                  style={{
-                    display: "block", width: "100%", textAlign: "right",
-                    padding: "9px 16px", background: company === c ? "var(--local-accent)" : "transparent",
-                    color: company === c ? "#fff" : "var(--local-text)",
-                    border: "none", cursor: "pointer", fontSize: 13, fontFamily: "inherit",
-                  }}
+                  style={menuItemStyle(company === c)}
                 >
-                  {c || "كل الشركات"}
+                  {c}
                 </button>
               ))}
             </div>
@@ -263,27 +400,35 @@ export function InventorySection({
         <div className="local-empty" style={{ padding: 40 }}>جاري التحميل…</div>
       )}
 
-      {/* Grouped by governorate */}
+      {/* Empty */}
       {!loading && grouped.length === 0 && (
         <div className="local-empty">لا توجد مواد مطابقة.</div>
       )}
 
-      {!loading && grouped.map(({ govName, items }) => (
-        <div key={govName} style={{ marginBottom: 28 }}>
-          {/* Governorate header */}
+      {/* Records grouped by governorate */}
+      {!loading && grouped.map(({ govName, govId, items }) => (
+        <div key={govId} style={{ marginBottom: 28 }}>
+          {/* Group header */}
           <div style={{
             display: "flex", alignItems: "center", gap: 10,
             marginBottom: 10, paddingBottom: 6,
-            borderBottom: "2px solid var(--local-accent)",
+            borderBottom: "2px solid var(--local-accent, #16a34a)",
           }}>
-            <span style={{
-              fontWeight: 700, fontSize: 15, color: "var(--local-accent)",
-            }}>
+            <span style={{ fontWeight: 700, fontSize: 15, color: "var(--local-accent, #16a34a)" }}>
               📍 {govName}
             </span>
-            <span style={{ fontSize: 12, color: "var(--local-muted)" }}>
+            <span style={{ fontSize: 12, color: "var(--local-muted, #666)" }}>
               ({items.length} مادة · {fmt(items.reduce((s, i) => s + i.quantity, 0))} قطعة)
             </span>
+            {!editMode && (
+              <span style={{
+                marginRight: "auto", fontSize: 11,
+                background: "rgba(245,158,11,.15)", color: "#92400e",
+                padding: "2px 8px", borderRadius: 20,
+              }}>
+                عرض فقط
+              </span>
+            )}
           </div>
 
           <div className="local-list local-stock-list">
@@ -291,43 +436,57 @@ export function InventorySection({
               const key = rowKey(stock.materialId, stock.governorateId);
               const draft = drafts[key] ?? String(stock.quantity);
               const changed = Number(draft) !== stock.quantity;
+              const isSaving = saving === key;
+
               return (
                 <article className="local-list-row" key={key}>
                   <div style={{ flex: 1 }}>
                     <strong style={{ fontSize: 14 }}>{stock.material}</strong>
-                    <span style={{ fontSize: 12, color: "var(--local-muted)", display: "block", marginTop: 2 }}>
+                    <span style={{
+                      fontSize: 12, color: "var(--local-muted, #666)",
+                      display: "block", marginTop: 2,
+                    }}>
                       {stock.company} · سعر القطعة {fmt(stock.unitPrice)} د.ع
                     </span>
                   </div>
+
                   <div className="local-stock-actions">
                     <input
                       type="number"
                       min="0"
                       step="1"
                       value={draft}
+                      disabled={!editMode}
                       onChange={e =>
                         setDrafts(prev => ({ ...prev, [key]: e.target.value }))
                       }
                       aria-label={`رصيد ${stock.material} في ${govName}`}
                       style={{
-                        borderColor: changed ? "var(--local-accent)" : undefined,
+                        borderColor: editMode && changed ? "var(--local-accent, #16a34a)" : undefined,
+                        opacity: !editMode ? 0.6 : 1,
+                        cursor: !editMode ? "not-allowed" : "auto",
                       }}
                     />
                     <span>قطعة</span>
+
+                    {/* Save button — always visible, disabled when not in edit mode or no change */}
                     <button
                       type="button"
                       className="local-secondary"
-                      disabled={saving === key || !changed}
-                      onClick={() => void save(stock)}
+                      disabled={!editMode || !changed || isSaving}
+                      onClick={() => handleSaveClick(stock)}
+                      title={!editMode ? "اختر محافظة محددة للتعديل" : changed ? "حفظ التغييرات" : "لا يوجد تغيير"}
                       style={{
-                        opacity: !changed ? 0.45 : 1,
-                        background: changed ? "var(--local-accent)" : undefined,
-                        color: changed ? "#fff" : undefined,
-                        borderColor: changed ? "var(--local-accent)" : undefined,
+                        background: editMode && changed ? "var(--local-accent, #16a34a)" : undefined,
+                        color: editMode && changed ? "#fff" : undefined,
+                        borderColor: editMode && changed ? "var(--local-accent, #16a34a)" : undefined,
+                        opacity: (!editMode || !changed) ? 0.4 : 1,
+                        cursor: (!editMode || !changed) ? "not-allowed" : "pointer",
+                        transition: "all .15s",
                       }}
                     >
                       <Save size={14} />
-                      {saving === key ? "…" : "حفظ"}
+                      {isSaving ? "…" : "حفظ"}
                     </button>
                   </div>
                 </article>
