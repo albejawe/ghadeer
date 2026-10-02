@@ -36,6 +36,13 @@ type TargetRecord = {
   year: number;
   month: number;
   targetQuantity: number;
+  items?: {
+    materialId: string;
+    material: string;
+    company: string;
+    unitPrice: number;
+    targetQuantity: number;
+  }[];
 };
 type Batch = {
   governorateId: string;
@@ -626,7 +633,14 @@ export function DelegatesDashboard({
             {targetRows.map(row => (
               <article key={row.governorateId} className="local-target-stat">
                 {" "}
-                <strong>{row.governorate}</strong> <b>{row.percent}%</b>{" "}
+                <strong>
+                  {row.governorate}
+                  {row.items && row.items.length > 0 && (
+                    <span style={{ fontSize: 10, fontWeight: 600, color: "#059669", marginRight: 6 }}>
+                      ({row.items.length} مواد)
+                    </span>
+                  )}
+                </strong> <b>{row.percent}%</b>{" "}
                 <span>
                   {" "}
                   {number(row.sold)} من {number(row.targetQuantity)} قطعة{" "}

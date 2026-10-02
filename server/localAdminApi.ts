@@ -255,37 +255,65 @@ router.put("/targets", async (req, res) => {
     const governorateId = String(body.governorateId || "");
     const year = Number(body.year);
     const month = Number(body.month);
-    const targetQuantity = Number(body.targetQuantity);
-    const targetAmount =
-      body.targetAmount === "" || body.targetAmount == null
-        ? null
-        : Number(body.targetAmount);
-    if (
-      !governorateId ||
-      !Number.isInteger(year) ||
-      !Number.isInteger(month) ||
-      month < 1 ||
-      month > 12 ||
-      !Number.isInteger(targetQuantity) ||
-      targetQuantity < 0 ||
-      (targetAmount !== null &&
-        (!Number.isFinite(targetAmount) || targetAmount < 0))
-    )
-      return res.status(400).json({ ok: false, error: "INVALID_TARGET" });
+    const db = getTursoClient();
     const now = new Date().toISOString();
-    await getTursoClient().execute({
+
+    if (!governorateId || !Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12)
+      return res.status(400).json({ ok: false, error: "INVALID_TARGET" });
+
+    // If items array is provided (material-level targets)
+    if (Array.isArray(body.items)) {
+      const rawItems = body.items as Array<{ materialId: string; targetQuantity: number }>;
+      const validItems = rawItems
+        .map(i => ({ materialId: String(i.materialId || "").trim(), targetQuantity: Math.max(0, Math.floor(Number(i.targetQuantity) || 0)) }))
+        .filter(i => Boolean(i.materialId) && i.targetQuantity > 0);
+
+      let totalQty = 0;
+      let totalAmt = 0;
+      const matStatements: Array<{ sql: string; args: Array<string | number | null> }> = [
+        {
+          sql: "DELETE FROM monthly_material_targets WHERE governorate_id = ? AND year = ? AND month = ?",
+          args: [governorateId, year, month],
+        },
+      ];
+
+      if (validItems.length > 0) {
+        const matIds = validItems.map(i => i.materialId);
+        const matsResult = await db.execute({
+          sql: `SELECT id, unit_price AS unitPrice FROM materials WHERE id IN (${matIds.map(() => "?").join(",")})`,
+          args: matIds,
+        });
+        const priceMap = new Map(matsResult.rows.map(r => [String(r.id), Number(r.unitPrice || 0)]));
+
+        for (const item of validItems) {
+          const price = priceMap.get(item.materialId) || 0;
+          totalQty += item.targetQuantity;
+          totalAmt += item.targetQuantity * price;
+          matStatements.push({
+            sql: "INSERT INTO monthly_material_targets (id, governorate_id, material_id, year, month, target_quantity, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            args: [randomUUID(), governorateId, item.materialId, year, month, item.targetQuantity, user.id, now, now],
+          });
+        }
+      }
+
+      matStatements.push({
+        sql: "INSERT INTO monthly_targets (id, governorate_id, year, month, target_quantity, target_amount, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(governorate_id, year, month) DO UPDATE SET target_quantity = excluded.target_quantity, target_amount = excluded.target_amount, created_by = excluded.created_by, updated_at = excluded.updated_at",
+        args: [randomUUID(), governorateId, year, month, totalQty, totalAmt, user.id, now, now],
+      });
+
+      await db.batch(matStatements, "write");
+      return res.json({ ok: true, totalQty, totalAmt, itemsCount: validItems.length });
+    }
+
+    // Legacy single target
+    const targetQuantity = Number(body.targetQuantity);
+    const targetAmount = body.targetAmount === "" || body.targetAmount == null ? null : Number(body.targetAmount);
+    if (!Number.isInteger(targetQuantity) || targetQuantity < 0 || (targetAmount !== null && (!Number.isFinite(targetAmount) || targetAmount < 0)))
+      return res.status(400).json({ ok: false, error: "INVALID_TARGET" });
+
+    await db.execute({
       sql: "INSERT INTO monthly_targets (id, governorate_id, year, month, target_quantity, target_amount, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(governorate_id, year, month) DO UPDATE SET target_quantity=excluded.target_quantity, target_amount=excluded.target_amount, created_by=excluded.created_by, updated_at=excluded.updated_at",
-      args: [
-        randomUUID(),
-        governorateId,
-        year,
-        month,
-        targetQuantity,
-        targetAmount,
-        user.id,
-        now,
-        now,
-      ],
+      args: [randomUUID(), governorateId, year, month, targetQuantity, targetAmount, user.id, now, now],
     });
     return res.json({ ok: true });
   } catch {
