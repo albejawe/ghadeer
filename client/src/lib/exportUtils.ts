@@ -776,3 +776,153 @@ export function buildSalesHistoryExcelHtml(data: SalesHistoryExportData): string
 
   return html;
 }
+
+// ── Inventory Export ─────────────────────────────────────────────────────────
+
+export type InventoryExportRow = {
+  materialId: string;
+  material: string;
+  company: string;
+  unitPrice: number;
+  governorateId: string;
+  governorate: string;
+  quantity: number;
+  updatedAt?: string;
+};
+
+export function buildInventoryExcelHtml(
+  rows: InventoryExportRow[],
+  filters?: { governorate?: string; company?: string }
+): string {
+  const exportDate = new Date().toLocaleDateString("ar-IQ", {
+    year: "numeric", month: "long", day: "numeric",
+    hour: "2-digit", minute: "2-digit",
+  });
+
+  const fmtNum = (n: number) => n.toLocaleString("en-US");
+  const fmtMoney = (n: number) => n.toLocaleString("en-US", { minimumFractionDigits: 0 });
+
+  // Group by governorate
+  const govMap = new Map<string, { govName: string; items: InventoryExportRow[] }>();
+  for (const row of rows) {
+    if (!govMap.has(row.governorateId))
+      govMap.set(row.governorateId, { govName: row.governorate, items: [] });
+    govMap.get(row.governorateId)!.items.push(row);
+  }
+  const govGroups = Array.from(govMap.values());
+
+  const totalQty = rows.reduce((s, r) => s + r.quantity, 0);
+  const totalValue = rows.reduce((s, r) => s + r.quantity * r.unitPrice, 0);
+  const totalMaterials = rows.length;
+  const govCount = govGroups.length;
+
+  const filterNote = filters
+    ? [
+        filters.governorate ? `المحافظة: ${filters.governorate}` : "",
+        filters.company ? `الشركة: ${filters.company}` : "",
+      ].filter(Boolean).join(" · ")
+    : "";
+
+  const ACCENT = "#065f46";
+  const ACCENT2 = "#047857";
+  const GOV_BG = "#d1fae5";
+  const GOV_TEXT = "#064e3b";
+  const ALT_ROW = "#f0fdf4";
+  const HEADER_BG = "#059669";
+
+  let html = `<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+<meta charset="UTF-8">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Segoe UI', Arial, sans-serif; direction: rtl; background: #f8fafc; color: #1e293b; font-size: 10pt; }
+.page { max-width: 1100px; margin: 0 auto; background: #fff; }
+.report-header { background: linear-gradient(135deg, ${ACCENT} 0%, ${ACCENT2} 60%, #10b981 100%); color: #fff; padding: 32px 36px 24px; }
+.report-title { font-size: 22pt; font-weight: 800; }
+.report-subtitle { font-size: 11pt; opacity: .85; margin-top: 6px; }
+.report-meta { font-size: 9pt; opacity: .7; margin-top: 12px; }
+.kpi-strip { display: flex; border-bottom: 3px solid ${ACCENT}; background: #f0fdf4; }
+.kpi-card { flex: 1; padding: 18px 20px; border-left: 1px solid #d1fae5; text-align: center; }
+.kpi-card:last-child { border-left: none; }
+.kpi-value { font-size: 18pt; font-weight: 800; color: ${ACCENT}; line-height: 1; }
+.kpi-label { font-size: 9pt; color: #6b7280; margin-top: 4px; }
+.gov-header { background: ${GOV_BG}; color: ${GOV_TEXT}; padding: 10px 20px; font-size: 13pt; font-weight: 700; border-right: 5px solid ${ACCENT2}; border-top: 1px solid #a7f3d0; border-bottom: 1px solid #a7f3d0; display: flex; align-items: center; gap: 10px; }
+.gov-badge { background: ${ACCENT2}; color: #fff; border-radius: 20px; padding: 2px 12px; font-size: 9pt; font-weight: 600; }
+table { width: 100%; border-collapse: collapse; }
+thead tr { background: ${HEADER_BG}; color: #fff; }
+thead th { padding: 10px 14px; text-align: right; font-size: 10pt; font-weight: 700; white-space: nowrap; border: none; }
+tbody tr td { padding: 9px 14px; border-bottom: 1px solid #e2e8f0; font-size: 10pt; vertical-align: middle; }
+tbody tr:nth-child(even) td { background: ${ALT_ROW}; }
+.qty-zero { color: #6b7280; font-weight: 500; }
+.qty-low  { color: #dc2626; font-weight: 700; }
+.qty-ok   { color: #16a34a; font-weight: 700; }
+.subtotal td { background: #ecfdf5 !important; font-weight: 700; color: ${GOV_TEXT}; border-top: 2px solid #6ee7b7; }
+.grand-total td { background: ${ACCENT} !important; color: #fff !important; font-weight: 800; font-size: 11pt; border-top: 3px solid #065f46; }
+.report-footer { text-align: center; padding: 16px; font-size: 8pt; color: #94a3b8; border-top: 1px solid #e2e8f0; background: #f8fafc; }
+</style>
+</head>
+<body>
+<div class="page">
+
+<div class="report-header">
+  <div class="report-title">📦 تقرير المخزون</div>
+  <div class="report-subtitle">نظام غدير المحاسبي — رصيد المواد حسب المحافظة</div>
+  <div class="report-meta">تاريخ التصدير: ${escapeHtml(exportDate)}${filterNote ? ` · الفلاتر: ${escapeHtml(filterNote)}` : ""}</div>
+</div>
+
+<div class="kpi-strip">
+  <div class="kpi-card"><div class="kpi-value">${fmtNum(govCount)}</div><div class="kpi-label">المحافظات</div></div>
+  <div class="kpi-card"><div class="kpi-value">${fmtNum(totalMaterials)}</div><div class="kpi-label">إجمالي الأصناف</div></div>
+  <div class="kpi-card"><div class="kpi-value">${fmtNum(totalQty)}</div><div class="kpi-label">إجمالي القطع</div></div>
+  <div class="kpi-card"><div class="kpi-value">${fmtMoney(totalValue)}</div><div class="kpi-label">القيمة الإجمالية (د.ع)</div></div>
+</div>
+
+`;
+
+  for (const { govName, items } of govGroups) {
+    const govQty = items.reduce((s, r) => s + r.quantity, 0);
+    const govValue = items.reduce((s, r) => s + r.quantity * r.unitPrice, 0);
+
+    html += `<div class="gov-header">📍 ${escapeHtml(govName)}<span class="gov-badge">${items.length} مادة</span><span class="gov-badge">${fmtNum(govQty)} قطعة</span></div>
+<table>
+<thead><tr><th>#</th><th>المادة</th><th>الشركة</th><th>سعر القطعة (د.ع)</th><th>الكمية (قطعة)</th><th>القيمة الإجمالية (د.ع)</th><th>آخر تحديث</th></tr></thead>
+<tbody>
+`;
+    items.forEach((row, idx) => {
+      const value = row.quantity * row.unitPrice;
+      const qtyClass = row.quantity === 0 ? "qty-zero" : row.quantity < 10 ? "qty-low" : "qty-ok";
+      const updatedAt = row.updatedAt ? new Date(row.updatedAt).toLocaleDateString("ar-IQ") : "—";
+      html += `<tr>
+<td style="color:#94a3b8;font-size:9pt">${idx + 1}</td>
+<td><strong>${escapeHtml(row.material)}</strong></td>
+<td style="color:#475569">${escapeHtml(row.company)}</td>
+<td style="text-align:left;direction:ltr">${fmtMoney(row.unitPrice)}</td>
+<td class="${qtyClass}" style="text-align:center;font-size:12pt">${fmtNum(row.quantity)}</td>
+<td style="text-align:left;direction:ltr;color:#1e293b;font-weight:600">${fmtMoney(value)}</td>
+<td style="font-size:9pt;color:#94a3b8">${escapeHtml(updatedAt)}</td>
+</tr>
+`;
+    });
+    html += `<tr class="subtotal"><td colspan="4" style="text-align:right">مجموع ${escapeHtml(govName)}</td><td style="text-align:center">${fmtNum(govQty)}</td><td style="text-align:left;direction:ltr">${fmtMoney(govValue)}</td><td></td></tr>
+</tbody></table>
+<div style="height:16px;background:#f8fafc;border-bottom:1px solid #e2e8f0"></div>
+`;
+  }
+
+  html += `<table><tbody>
+<tr class="grand-total">
+<td colspan="4" style="text-align:right;padding:14px 18px">📦 الإجمالي الكلي — ${govCount} محافظة</td>
+<td style="text-align:center;padding:14px">${fmtNum(totalQty)} قطعة</td>
+<td style="text-align:left;direction:ltr;padding:14px">${fmtMoney(totalValue)} د.ع</td>
+<td style="padding:14px"></td>
+</tr>
+</tbody></table>
+
+<div class="report-footer">تم إنشاء هذا التقرير آلياً عبر نظام غدير المحاسبي · تاريخ التصدير: ${escapeHtml(exportDate)}</div>
+</div>
+</body>
+</html>`;
+
+  return html;
+}

@@ -1,5 +1,6 @@
-import { Save, Search, Package, ChevronDown, AlertTriangle } from "lucide-react";
+import { Save, Search, Package, ChevronDown, AlertTriangle, FileSpreadsheet } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { buildInventoryExcelHtml, downloadExcelFile } from "../lib/exportUtils";
 
 type Stock = {
   materialId: string;
@@ -240,6 +241,18 @@ export function InventorySection({
   const totalItems = shown.length;
   const totalQuantity = shown.reduce((sum, s) => sum + s.quantity, 0);
 
+  const handleExport = () => {
+    if (!shown.length) return showToast("لا توجد بيانات للتصدير", "info");
+    const govName = allGovs.find(g => g.id === selectedGov)?.name;
+    const html = buildInventoryExcelHtml(shown, {
+      governorate: govName,
+      company: company || undefined,
+    });
+    const dateStr = new Date().toISOString().slice(0, 10);
+    downloadExcelFile(`تقرير-المخزون-${dateStr}`, html);
+    showToast("✓ تم تصدير تقرير المخزون بنجاح", "success");
+  };
+
   const dropdownBtnStyle = (active: boolean): React.CSSProperties => ({
     display: "flex", alignItems: "center", gap: 6,
     padding: "8px 14px", borderRadius: 8,
@@ -293,11 +306,31 @@ export function InventorySection({
             اختر محافظة من القائمة للتعديل. عند اختيار "كل المحافظات" يكون العرض فقط بدون تعديل.
           </p>
         </div>
-        <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+        <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
           <span style={{ fontSize: 13, color: "var(--local-muted, #666)" }}>
             <Package size={14} style={{ verticalAlign: "middle", marginLeft: 4 }} />
             {fmt(totalQuantity)} قطعة · {totalItems} صنف
           </span>
+          <button
+            type="button"
+            onClick={handleExport}
+            disabled={!shown.length}
+            style={{
+              display: "flex", alignItems: "center", gap: 6,
+              padding: "8px 16px", borderRadius: 8,
+              border: "none",
+              background: shown.length
+                ? "linear-gradient(135deg, #065f46 0%, #059669 100%)"
+                : "var(--local-border, #d1d5db)",
+              color: "#fff",
+              fontSize: 13, fontWeight: 600, cursor: shown.length ? "pointer" : "not-allowed",
+              fontFamily: "inherit", transition: "opacity .15s",
+              opacity: shown.length ? 1 : 0.5,
+            }}
+          >
+            <FileSpreadsheet size={15} />
+            تصدير Excel
+          </button>
         </div>
       </div>
 
