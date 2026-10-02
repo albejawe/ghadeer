@@ -447,8 +447,12 @@ router.get("/inventory", async (req, res) => {
     const companyFilter = user.role === "admin" ? "" : ` AND m.company_id IN (${user.companyIds.map(() => "?").join(",") || "''"})`;
     const companyArgs = user.role === "admin" ? [] : user.companyIds;
 
-    // Fetch all governorates (for UI chips)
-    const govsResult = await db.execute("SELECT id, name FROM governorates WHERE active = 1 ORDER BY name");
+    // Fetch governorates for dropdown (supervisor sees only their assigned governorate)
+    const govsResult = await db.execute(
+      allowedGovIds
+        ? { sql: `SELECT id, name FROM governorates WHERE id IN (${allowedGovIds.map(() => "?").join(",")}) AND active = 1 ORDER BY name`, args: allowedGovIds }
+        : "SELECT id, name FROM governorates WHERE active = 1 ORDER BY name"
+    );
 
     // Fetch stock per (material, governorate)
     const result = await db.execute({

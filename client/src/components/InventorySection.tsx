@@ -158,6 +158,9 @@ export function InventorySection({
           ])
         )
       );
+      if (data.governorates.length === 1) {
+        setSelectedGov(data.governorates[0].id);
+      }
     } catch {
       showToast("تعذر تحميل المخزون", "error");
     } finally {
@@ -203,7 +206,12 @@ export function InventorySection({
 
   const doSave = async (stock: Stock) => {
     const key = rowKey(stock.materialId, stock.governorateId);
-    const quantity = Number(drafts[key]);
+    const raw = drafts[key];
+    if (raw === undefined || raw.trim() === "") {
+      showToast("أدخل عدد قطع صحيحاً", "error");
+      return;
+    }
+    const quantity = Number(raw);
     if (!Number.isInteger(quantity) || quantity < 0) {
       showToast("أدخل عدد قطع صحيحاً", "error");
       return;
@@ -232,7 +240,11 @@ export function InventorySection({
 
   const handleSaveClick = (stock: Stock) => {
     const key = rowKey(stock.materialId, stock.governorateId);
-    const quantity = Number(drafts[key]);
+    const raw = drafts[key];
+    if (raw === undefined || raw.trim() === "") {
+      return showToast("أدخل عدد قطع صحيحاً", "error");
+    }
+    const quantity = Number(raw);
     if (!Number.isInteger(quantity) || quantity < 0)
       return showToast("أدخل عدد قطع صحيحاً", "error");
     setConfirmStock(stock);
