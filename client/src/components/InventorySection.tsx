@@ -274,7 +274,7 @@ export function InventorySection({
     fontSize: 13, cursor: "pointer", fontFamily: "inherit",
     fontWeight: active ? 600 : 400,
     transition: "all .15s",
-    minWidth: 130, justifyContent: "space-between",
+    width: "100%", boxSizing: "border-box", justifyContent: "space-between",
   });
 
   const menuStyle: React.CSSProperties = {
@@ -374,7 +374,7 @@ export function InventorySection({
         </label>
 
         {/* Governorate dropdown */}
-        <div ref={govMenuRef} style={{ position: "relative" }}>
+        <div ref={govMenuRef} style={{ position: "relative", width: "100%" }}>
           <button
             type="button"
             onClick={() => setShowGovMenu(v => !v)}
@@ -407,7 +407,7 @@ export function InventorySection({
         </div>
 
         {/* Company dropdown */}
-        <div ref={companyMenuRef} style={{ position: "relative" }}>
+        <div ref={companyMenuRef} style={{ position: "relative", width: "100%" }}>
           <button
             type="button"
             onClick={() => setShowCompanyMenu(v => !v)}

@@ -699,27 +699,32 @@ function Ranking({
       <h3>{title}</h3>{" "}
       {rows.map((row, index) => (
         <div key={row.name}>
-          {" "}
-          <b>{index + 1}</b>{" "}
+          <b>{index + 1}</b>
           <span>
-            {" "}
-            {row.name}{" "}
+            <strong className="local-rank-name" title={row.name}>
+              {row.name}
+            </strong>
             <i>
-              {" "}
               <em
                 style={{ width: `${Math.max(8, (row.quantity / top) * 100)}%` }}
-              />{" "}
-            </i>{" "}
-          </span>{" "}
-          <strong>
-            {" "}
-            {number(row.quantity)} <small>قطعة</small>
-            <small> · {((row.quantity / total) * 100).toFixed(1)}%</small>
-            {row.amount != null && <small> · {money(row.amount)}</small>}{" "}
-          </strong>{" "}
+              />
+            </i>
+          </span>
+          <div className="local-rank-stat">
+            <div className="local-rank-qty-pct">
+              <span>{number(row.quantity)}</span>
+              <small> قطعة</small>
+              <small className="local-rank-pct">
+                {" "}· {((row.quantity / total) * 100).toFixed(1)}%
+              </small>
+            </div>
+            {row.amount != null && (
+              <span className="local-rank-amt">{money(row.amount)}</span>
+            )}
+          </div>
         </div>
-      ))}{" "}
-      {!rows.length && <p>لا توجد بيانات لهذه الفلاتر.</p>}{" "}
+      ))}
+      {!rows.length && <p>لا توجد بيانات لهذه الفلاتر.</p>}
     </section>
   );
 }

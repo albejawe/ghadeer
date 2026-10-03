@@ -363,106 +363,64 @@ export function TargetsSection({
       </div>
 
       {/* PERIOD PICKER & OVERALL KPI BAR */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "auto 1fr",
-          gap: 16,
-          alignItems: "center",
-          background: "#ffffff",
-          border: "1px solid #e2e8f0",
-          borderRadius: 14,
-          padding: "16px 20px",
-          marginBottom: 20,
-          boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
-        }}
-      >
+      <div className="local-targets-header-card">
         {/* Month selector */}
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <label style={{ fontSize: 13, fontWeight: 700, color: "#334155", whiteSpace: "nowrap" }}>
+        <div className="local-targets-month-picker">
+          <label className="local-targets-month-label">
             📅 شهر الخطة:
           </label>
-          <input
-            type="month"
-            value={`${year}-${String(month).padStart(2, "0")}`}
-            onChange={e => {
-              const [y, m] = e.target.value.split("-");
-              if (y && m) {
-                setYear(y);
-                setMonth(String(Number(m)));
-              }
-            }}
-            style={{
-              padding: "7px 12px",
-              borderRadius: 8,
-              border: "1.5px solid #cbd5e1",
-              fontSize: 13,
-              fontWeight: 600,
-              fontFamily: "inherit",
-              outline: "none",
-              color: "#0f172a",
-              background: "#f8fafc",
-            }}
-          />
-          <button
-            type="button"
-            onClick={() => {
-              const now = new Date();
-              setYear(String(now.getFullYear()));
-              setMonth(String(now.getMonth() + 1));
-            }}
-            style={{
-              padding: "7px 12px",
-              borderRadius: 8,
-              border: "1px solid #e2e8f0",
-              background: "#f1f5f9",
-              fontSize: 12,
-              cursor: "pointer",
-              fontFamily: "inherit",
-              color: "#475569",
-              whiteSpace: "nowrap",
-            }}
-          >
-            الشهر الحالي
-          </button>
+          <div className="local-targets-month-inputs">
+            <input
+              type="month"
+              value={`${year}-${String(month).padStart(2, "0")}`}
+              onChange={e => {
+                const [y, m] = e.target.value.split("-");
+                if (y && m) {
+                  setYear(y);
+                  setMonth(String(Number(m)));
+                }
+              }}
+              className="local-targets-month-input"
+            />
+            <button
+              type="button"
+              onClick={() => {
+                const now = new Date();
+                setYear(String(now.getFullYear()));
+                setMonth(String(now.getMonth() + 1));
+              }}
+              className="local-targets-current-month-btn"
+            >
+              الشهر الحالي
+            </button>
+          </div>
         </div>
 
         {/* Global KPI stats */}
-        <div
-          style={{
-            display: "flex",
-            gap: 16,
-            justifyContent: "flex-end",
-            alignItems: "center",
-            flexWrap: "wrap",
-          }}
-        >
-          <div style={{ textAlign: "center", minWidth: 100 }}>
-            <span style={{ fontSize: 11, color: "#64748b", display: "block" }}>المحافظات المخططة</span>
-            <strong style={{ fontSize: 15, color: "#0f172a" }}>
+        <div className="local-targets-kpi-grid">
+          <div className="local-targets-kpi-item">
+            <span className="local-targets-kpi-label">المحافظات المخططة</span>
+            <strong className="local-targets-kpi-val" style={{ color: "#0f172a" }}>
               {overallKPIs.plannedGovs} / {reference.governorates.length}
             </strong>
           </div>
-          <div style={{ width: 1, height: 28, background: "#e2e8f0" }} />
-          <div style={{ textAlign: "center", minWidth: 120 }}>
-            <span style={{ fontSize: 11, color: "#64748b", display: "block" }}>إجمالي المستهدف</span>
-            <strong style={{ fontSize: 15, color: "#059669" }}>
+          <div className="local-targets-kpi-item">
+            <span className="local-targets-kpi-label">إجمالي المستهدف</span>
+            <strong className="local-targets-kpi-val" style={{ color: "#059669" }}>
               {fmt(overallKPIs.totalTargetUnits)} قطعة
             </strong>
           </div>
-          <div style={{ width: 1, height: 28, background: "#e2e8f0" }} />
-          <div style={{ textAlign: "center", minWidth: 130 }}>
-            <span style={{ fontSize: 11, color: "#64748b", display: "block" }}>القيمة التقديرية</span>
-            <strong style={{ fontSize: 15, color: "#0284c7" }}>
+          <div className="local-targets-kpi-item">
+            <span className="local-targets-kpi-label">القيمة التقديرية</span>
+            <strong className="local-targets-kpi-val" style={{ color: "#0284c7" }}>
               {fmtMoney(overallKPIs.totalTargetAmount)} د.ع
             </strong>
           </div>
-          <div style={{ width: 1, height: 28, background: "#e2e8f0" }} />
-          <div style={{ textAlign: "center", minWidth: 120 }}>
-            <span style={{ fontSize: 11, color: "#64748b", display: "block" }}>الإنجاز العام</span>
+          <div className="local-targets-kpi-item">
+            <span className="local-targets-kpi-label">الإنجاز العام</span>
             <strong
+              className="local-targets-kpi-val"
               style={{
-                fontSize: 15,
                 color:
                   overallKPIs.percentage >= 100
                     ? "#16a34a"
@@ -485,13 +443,7 @@ export function TargetsSection({
 
       {/* GOVERNORATE CARDS GRID */}
       {!loadingMonth && (
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(460px, 1fr))",
-            gap: 18,
-          }}
-        >
+        <div className="local-target-cards-grid">
           {reference.governorates.map(gov => {
             const items = govItems[gov.id] || [];
             const isSaving = savingGov === gov.id;
@@ -758,126 +710,58 @@ export function TargetsSection({
                         return (
                           <div
                             key={it.materialId}
-                            style={{
-                              display: "grid",
-                              gridTemplateColumns: "1fr auto auto auto",
-                              alignItems: "center",
-                              gap: 8,
-                              padding: "8px 10px",
-                              borderRadius: 8,
-                              background: "#f8fafc",
-                              border: "1px solid #e2e8f0",
-                              fontSize: 12,
-                            }}
+                            className="local-target-mat-card"
                           >
-                            {/* Material & Company info */}
-                            <div style={{ minWidth: 0 }}>
+                            {/* Material & Trash button */}
+                            <div className="local-target-mat-head">
                               <div
-                                style={{
-                                  fontWeight: 700,
-                                  color: "#0f172a",
-                                  whiteSpace: "nowrap",
-                                  overflow: "hidden",
-                                  textOverflow: "ellipsis",
-                                }}
+                                className="local-target-mat-name"
                                 title={matName}
                               >
                                 {matName}
                               </div>
-                              <div
-                                style={{
-                                  fontSize: 11,
-                                  color: "#64748b",
-                                  display: "flex",
-                                  gap: 6,
-                                  alignItems: "center",
-                                  marginTop: 2,
-                                }}
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveMaterial(gov.id, it.materialId)}
+                                title="إزالة المادة من الخطة"
+                                className="local-target-mat-trash"
                               >
-                                <span
-                                  style={{
-                                    background: "#e2e8f0",
-                                    padding: "1px 5px",
-                                    borderRadius: 4,
-                                    fontSize: 10,
-                                  }}
-                                >
+                                <Trash2 size={15} />
+                              </button>
+                            </div>
+
+                            {/* Meta info: company, price, sold */}
+                            <div className="local-target-mat-meta">
+                              {company && (
+                                <span className="local-target-mat-badge">
                                   {company}
                                 </span>
-                                <span>{fmtMoney(price)} د.ع</span>
-                                <span>· بيع: <b>{fmt(itemAchieved)}</b></span>
+                              )}
+                              <span>{fmtMoney(price)} د.ع</span>
+                              <span>· بيع: <b>{fmt(itemAchieved)}</b></span>
+                            </div>
+
+                            {/* Quantity input & total amount */}
+                            <div className="local-target-mat-actions">
+                              <div className="local-target-mat-input-group">
+                                <input
+                                  type="number"
+                                  min="1"
+                                  step="1"
+                                  value={it.targetQuantity}
+                                  onChange={e =>
+                                    handleQuantityChange(gov.id, it.materialId, e.target.value)
+                                  }
+                                  className="local-target-mat-qty-input"
+                                  placeholder="الكمية"
+                                />
+                                <span>قطعة</span>
+                              </div>
+
+                              <div className="local-target-mat-total">
+                                {fmtMoney(itemAmt)} د.ع
                               </div>
                             </div>
-
-                            {/* Quantity Input */}
-                            <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                              <input
-                                type="number"
-                                min="1"
-                                step="1"
-                                value={it.targetQuantity}
-                                onChange={e =>
-                                  handleQuantityChange(gov.id, it.materialId, e.target.value)
-                                }
-                                style={{
-                                  width: 70,
-                                  padding: "5px 6px",
-                                  borderRadius: 6,
-                                  border: "1.5px solid #cbd5e1",
-                                  textAlign: "center",
-                                  fontSize: 13,
-                                  fontWeight: 700,
-                                  color: "#059669",
-                                  fontFamily: "inherit",
-                                  outline: "none",
-                                  background: "#ffffff",
-                                }}
-                                placeholder="الكمية"
-                              />
-                              <span style={{ fontSize: 11, color: "#64748b" }}>قطعة</span>
-                            </div>
-
-                            {/* Total amount for this item */}
-                            <div
-                              style={{
-                                textAlign: "left",
-                                minWidth: 70,
-                                fontSize: 11,
-                                color: "#475569",
-                                direction: "ltr",
-                              }}
-                            >
-                              {fmtMoney(itemAmt)}
-                            </div>
-
-                            {/* Remove button */}
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveMaterial(gov.id, it.materialId)}
-                              title="إزالة المادة من الخطة"
-                              style={{
-                                background: "transparent",
-                                border: "none",
-                                color: "#94a3b8",
-                                cursor: "pointer",
-                                padding: 4,
-                                borderRadius: 6,
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                transition: "all 0.15s ease",
-                              }}
-                              onMouseEnter={e => {
-                                (e.currentTarget as HTMLElement).style.color = "#ef4444";
-                                (e.currentTarget as HTMLElement).style.background = "#fee2e2";
-                              }}
-                              onMouseLeave={e => {
-                                (e.currentTarget as HTMLElement).style.color = "#94a3b8";
-                                (e.currentTarget as HTMLElement).style.background = "transparent";
-                              }}
-                            >
-                              <Trash2 size={15} />
-                            </button>
                           </div>
                         );
                       })}
