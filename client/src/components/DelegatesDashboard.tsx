@@ -237,17 +237,19 @@ export function DelegatesDashboard({
     string,
     { name: string; quantity: number; amount: number }
   >();
-  for (const batch of scopedBatches)
-    for (const item of batch.items) {
-      const current = materialMovement.get(item.materialId) || {
-        name: item.material,
-        quantity: 0,
-        amount: 0,
-      };
-      current.quantity += item.quantity;
-      current.amount += item.totalAmount;
-      materialMovement.set(item.materialId, current);
-    }
+  if (!filters.representativeId) {
+    for (const batch of scopedBatches)
+      for (const item of batch.items) {
+        const current = materialMovement.get(item.materialId) || {
+          name: item.material,
+          quantity: 0,
+          amount: 0,
+        };
+        current.quantity += item.quantity;
+        current.amount += item.totalAmount;
+        materialMovement.set(item.materialId, current);
+      }
+  }
   // A warehouse batch already includes representative sales. Use the
   // representative movement only as a fallback for materials that have no
   // warehouse breakdown, never add both and double-count the same pieces.
@@ -381,14 +383,16 @@ export function DelegatesDashboard({
             ? Number(((r.quantity / warehouseUnits) * 100).toFixed(1))
             : 0,
         })),
-        materialRanking: materialRanking.map(r => ({
-          name: r.name,
-          quantity: r.quantity,
-          amount: r.amount,
-          percent: warehouseUnits
-            ? Number(((r.quantity / warehouseUnits) * 100).toFixed(1))
-            : 0,
-        })),
+        materialRanking: (() => {
+          const totalMatUnits =
+            materialRanking.reduce((sum, item) => sum + item.quantity, 0) || 1;
+          return materialRanking.map(r => ({
+            name: r.name,
+            quantity: r.quantity,
+            amount: r.amount,
+            percent: Number(((r.quantity / totalMatUnits) * 100).toFixed(1)),
+          }));
+        })(),
         sales: scopedSales.map(sale => ({
           saleDate: sale.saleDate,
           governorate: sale.governorate,
